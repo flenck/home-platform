@@ -1,0 +1,25 @@
+[project]
+name = "homeplatform"
+version = "0.1.0"
+description = "Modular smart home platform — whole-house intelligence framework"
+requires-python = ">=3.12"
+license = "MIT"
+
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.32.0",
+    "asyncpg==0.30.0",
+    "paho-mqtt==1.6.1",
+    "pyyaml==6.0.2",
+    "python-dotenv==1.0.1",
+]
+
+[project.scripts]
+homeplatform = "homeplatform.__main__:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["homeplatform*"]

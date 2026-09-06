@@ -1,0 +1,32 @@
+# Home Platform Configuration
+# 全屋智能家居平台配置文件
+
+homeplatform:
+  name: "我的家"
+  api_token: "homeplatform"
+
+mqtt:
+  broker: "broker"   # docker-compose 中 mosquitto 服务名；本地开发改为 localhost
+  port: 1883
+  topic_prefix: "home/sensors"
+
+database:
+  url: "postgresql+asyncpg://home:home123@localhost:5432/homeplatform"
+
+# 组件配置
+components:
+  water_quality:
+    enabled: true
+  energy:
+    enabled: true
+  weather:
+    enabled: true
+    provider: open-meteo        # qweather | open-meteo（当前用 open-meteo）
+    latitude: 41.31167
+    longitude: 117.725
+    name: "隆化"
+    interval_sec: 600
+    # 和风天气（QWeather）配置（如需切换 provider: qweather 并启用下面两行）
+    # qweather_key: "c48dc8571a9745a686b63042dd07b578"
+    # qweather_location: "101090407"        # 隆化 LocationID
+    # qweather_host: "mt5ctxbc2f.re.qweatherapi.com"

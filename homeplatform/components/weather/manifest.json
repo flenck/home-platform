@@ -1,0 +1,6 @@
+{
+  "domain": "weather",
+  "name": "Weather (Open-Meteo)",
+  "dependencies": ["sensor"],
+  "integration_type": "device"
+}

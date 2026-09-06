@@ -1,0 +1,66 @@
+# ── 敏感信息：账号密码 / API Key / 服务器信息 ──────────────
+*.env
+.env
+infra/.env
+docs/95598-自动采集方案.md
+infra/SGCC_AUTO_DEPLOY.md
+scripts/sgcc_cookies.json
+scripts/turing_api*.json
+scripts/turing_windowkeys.txt
+
+# ── 调试脚本（含硬编码账号密码或一次性调试用途）───────────
+scripts/sgcc_annotate.py
+scripts/sgcc_capture_once.py
+scripts/sgcc_daemon.py
+scripts/sgcc_login_interactive.py
+scripts/cdp_*.py
+scripts/live_captcha_test*.py
+scripts/_fresh_profile_test.py
+scripts/diag_login.py
+scripts/qr_login.py
+scripts/inject_cookies.py
+scripts/cdp_diag.py
+scripts/cdp_slider_diag.py
+
+# ── 调试输出：截图 / 页面快照 / 日志 ──────────────────────
+scripts/*.png
+scripts/*.jpg
+scripts/*.html
+scripts/dbg_*
+scripts/sgcc_debug*
+scripts/sgcc_docker_error*
+scripts/captcha_*.json
+scripts/answer_clean*.png
+scripts/big_clean.png
+*.log
+*.lock
+
+# ── 浏览器 profile / 会话数据 ─────────────────────────────
+scripts/capture_out/
+scripts/capture_tmp_profile/
+scripts/annotate_profile/
+scripts/sgcc_profile/
+scripts/sgcc_profile_chrome/
+scripts/sgcc_data/
+.playwright-mcp/
+.claude/
+
+# ── Python ────────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+
+# ── 前端/固件依赖 ─────────────────────────────────────────
+node_modules/
+firmware/**/.pio/
+
+# ── 大文件（可重新获取）───────────────────────────────────
+yolov8n.pt
+
+# ── 系统 ──────────────────────────────────────────────────
+.DS_Store
+
+# ── 根目录界面截图 ────────────────────────────────────────
+/*.png
+/*.jpg

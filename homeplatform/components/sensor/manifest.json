@@ -1,0 +1,5 @@
+{
+  "domain": "sensor",
+  "name": "Sensor",
+  "integration_type": "entity"
+}

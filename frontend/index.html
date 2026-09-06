@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Home Platform · 全屋智能中枢</title>
+    <link rel="stylesheet" href="/style.css">
+    <script src="/chart.umd.min.js"></script>
+</head>
+<body>
+    <!-- Ambient background glow -->
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+    <div class="bg-grid"></div>
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div class="sidebar-logo">
+                <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5V10l-3.5 3.5-1.4-1.4L12 7.1l5.9 5.9-1.4 1.4L13 10v6.5h-2z"/>
+                </svg>
+            </div>
+            <div class="sidebar-brand">
+                <span class="sidebar-title">Home Platform</span>
+                <span class="sidebar-sub">全屋智能中枢</span>
+            </div>
+        </div>
+
+        <nav class="sidebar-nav">
+            <a class="nav-item active" data-page="overview" title="概览">
+                <svg viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+                <span class="nav-label">概览</span>
+            </a>
+            <a class="nav-item" data-page="water" title="水质">
+                <svg viewBox="0 0 24 24"><path d="M12 2c-4.5 6-8 10.5-8 14a8 8 0 0 0 16 0c0-3.5-3.5-8-8-14z"/></svg>
+                <span class="nav-label">水质</span>
+            </a>
+            <a class="nav-item" data-page="weather" title="天气">
+                <svg viewBox="0 0 24 24"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6 0 2.21.9 4.21 2.35 5.65L7.7 18.7A7.96 7.96 0 0 1 5 11.5c0-4.42 3.58-8 8-8 .86 0 1.69.14 2.48.4l-1.55 1.55c-.3-.05-.61-.08-.93-.08zM11 19.5h2v-3h-2v3z"/></svg>
+                <span class="nav-label">天气</span>
+            </a>
+            <a class="nav-item" data-page="energy" title="能耗">
+                <svg viewBox="0 0 24 24"><path d="M13 3h-2v10h2V3zm4.83 2.17l-1.42 1.42A6.92 6.92 0 0 1 19 12a7 7 0 0 1-14 0c0-2.74 1.55-5.11 3.83-6.35L7.41 4.23A9 9 0 0 0 3 12a9 9 0 0 0 18 0c0-3.28-1.75-6.16-4.17-7.83z"/></svg>
+                <span class="nav-label">能耗</span>
+            </a>
+            <a class="nav-item" data-page="news" title="新闻">
+                <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM5 7h7v4H5V7zm14 10H5v-2h14v2zm0-4h-7v-2h7v2z"/></svg>
+                <span class="nav-label">新闻</span>
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a class="nav-item" data-page="config" title="配置">
+                <svg viewBox="0 0 24 24"><path d="M19.14 12.94a8.14 8.14 0 0 0 .07-.94c0-.32-.04-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a6.97 6.97 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.47-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.03.3-.07.62-.07.94s.04.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.37 1.03.7 1.62.94l.36 2.54c.05.24.26.41.47.41h3.84c.21 0 .42-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"/></svg>
+                <span class="nav-label">配置</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main -->
+    <div class="main-wrapper" id="mainWrapper">
+        <header class="top-bar" id="topBar">
+            <button class="hamburger" id="hamburger" aria-label="菜单">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z"/></svg>
+            </button>
+            <div class="page-head">
+                <h1 class="page-title" id="pageTitle">概览</h1>
+                <span class="page-sub" id="pageSub">实时掌握全屋状态</span>
+            </div>
+            <div class="top-bar-spacer"></div>
+            <div class="live-clock" id="liveClock">--:--:--</div>
+            <span class="top-bar-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span class="status-text">连接中</span>
+            </span>
+        </header>
+
+        <main class="content" id="content">
+            <!-- ══════════ Overview ══════════ -->
+            <section class="page active" id="page-overview">
+                <div class="hero-panel glass">
+                    <div class="hero-text">
+                        <div class="hero-greet" id="heroGreet">你好 👋</div>
+                        <div class="hero-title">我的家 · 全屋状态总览</div>
+                        <div class="hero-sub" id="heroSub">正在同步最新数据…</div>
+                    </div>
+                    <div class="hero-status">
+                        <div class="hero-stat">
+                            <span class="hero-stat-label">在线组件</span>
+                            <span class="hero-stat-value" id="heroComponents">--</span>
+                        </div>
+                        <div class="hero-stat">
+                            <span class="hero-stat-label">数据更新</span>
+                            <span class="hero-stat-value" id="heroUpdated">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="kpi-grid" id="overview-kpis">
+                    <!-- KPI cards rendered dynamically -->
+                </div>
+
+                <div class="insight-row" id="overviewInsights">
+                    <!-- insight chips rendered dynamically -->
+                </div>
+
+                <div class="hot-news-panel glass panel-pad" id="overviewHot" style="display:none;">
+                    <!-- 今日热门新闻 rendered dynamically -->
+                </div>
+            </section>
+
+            <!-- ══════════ Water ══════════ -->
+            <section class="page" id="page-water">
+                <div class="detail-grid">
+                    <div class="glass panel-pad hero-value-panel">
+                        <div class="panel-label">
+                            <span class="dot cyan"></span> 当前水质 TDS
+                        </div>
+                        <div class="big-value-row">
+                            <span class="big-value" id="tds-value-card">--</span>
+                            <span class="big-unit">ppm</span>
+                        </div>
+                        <div class="badge-row">
+                            <span class="grade-badge" id="tds-badge">等待数据</span>
+                            <span class="updated-at" id="tds-time-card">--</span>
+                        </div>
+                        <!-- Gauge -->
+                        <div class="gauge-wrap">
+                            <svg class="gauge" viewBox="0 0 220 120">
+                                <path class="gauge-track" d="M 20 110 A 90 90 0 0 1 200 110"/>
+                                <path class="gauge-arc" id="gaugeArc" d="M 20 110 A 90 90 0 0 1 200 110"/>
+                                <defs>
+                                    <linearGradient id="gaugeGrad" x1="0" y1="0" x2="1" y2="0">
+                                        <stop offset="0%" stop-color="#22d3ee"/>
+                                        <stop offset="45%" stop-color="#34d399"/>
+                                        <stop offset="70%" stop-color="#fbbf24"/>
+                                        <stop offset="100%" stop-color="#f87171"/>
+                                    </linearGradient>
+                                </defs>
+                                <text class="gauge-value" id="gaugeValue" x="110" y="86" text-anchor="middle">--</text>
+                                <text class="gauge-unit" x="110" y="102" text-anchor="middle">ppm</text>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <div class="glass panel-pad insight-panel">
+                        <div class="panel-label"><span class="dot violet"></span> 水质洞察</div>
+                        <div class="insight-text" id="water-insight">等待传感器数据，将自动给出水质分析与建议。</div>
+                        <div class="stat-grid">
+                            <div class="mini-stat">
+                                <span class="mini-label">近 100 次最小值</span>
+                                <span class="mini-value" id="tds-min">--</span>
+                            </div>
+                            <div class="mini-stat">
+                                <span class="mini-label">平均值</span>
+                                <span class="mini-value" id="tds-avg">--</span>
+                            </div>
+                            <div class="mini-stat">
+                                <span class="mini-label">最大值</span>
+                                <span class="mini-value" id="tds-max">--</span>
+                            </div>
+                            <div class="mini-stat">
+                                <span class="mini-label">最新变化</span>
+                                <span class="mini-value" id="tds-trend">--</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot cyan"></span> 水质历史趋势</span>
+                        <span class="chart-hint" id="waterChartHint"></span>
+                    </div>
+                    <div class="chart-body"><canvas id="tdsChart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- ══════════ Weather ══════════ -->
+            <section class="page" id="page-weather">
+                <div class="detail-grid">
+                    <div class="glass panel-pad hero-value-panel">
+                        <div class="panel-label"><span class="dot amber"></span> 室外天气</div>
+                        <div class="weather-hero">
+                            <div class="weather-icon" id="weather-icon">
+                                <svg viewBox="0 0 24 24" width="64" height="64"><path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6 0 2.21.9 4.21 2.35 5.65L7.7 18.7A7.96 7.96 0 0 1 5 11.5c0-4.42 3.58-8 8-8 .86 0 1.69.14 2.48.4l-1.55 1.55c-.3-.05-.61-.08-.93-.08zM11 19.5h2v-3h-2v3z"/></svg>
+                            </div>
+                            <div class="weather-main">
+                                <div class="big-value" id="weather-temp-card">--</div>
+                                <div class="big-unit">°C</div>
+                                <div class="weather-cond" id="weather-condition-card">--</div>
+                                <div class="weather-loc" id="weather-location-card">--</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass panel-pad insight-panel">
+                        <div class="panel-label"><span class="dot violet"></span> 天气数据</div>
+                        <div class="kpi-stack">
+                            <div class="stack-row">
+                                <span class="stack-icon humid">☂</span>
+                                <div class="stack-info"><span class="stack-label">室外湿度</span><span class="stack-value" id="weather-humidity-card">--</span></div>
+                                <span class="stack-unit">%</span>
+                            </div>
+                            <div class="stack-row">
+                                <span class="stack-icon wind">➤</span>
+                                <div class="stack-info"><span class="stack-label">室外风速</span><span class="stack-value" id="weather-wind-card">--</span></div>
+                                <span class="stack-unit">km/h</span>
+                            </div>
+                            <div class="stack-row">
+                                <span class="stack-icon feel">◉</span>
+                                <div class="stack-info"><span class="stack-label">体感评估</span><span class="stack-value" id="weather-comfort">--</span></div>
+                                <span class="stack-unit"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot amber"></span> 室外温度趋势</span>
+                        <span class="chart-hint" id="weatherChartHint"></span>
+                    </div>
+                    <div class="chart-body"><canvas id="tempChart"></canvas></div>
+                </div>
+            </section>
+
+            <!-- ══════════ Energy ══════════ -->
+            <section class="page" id="page-energy">
+                <div class="kpi-grid" id="energy-kpis">
+                    <!-- energy KPI cards -->
+                </div>
+
+                <div class="glass panel-pad insight-panel wide">
+                    <div class="panel-label"><span class="dot amber"></span> 用电洞察</div>
+                    <div class="insight-text" id="energy-insight">等待电费数据…</div>
+                </div>
+
+                <div class="double-chart">
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot cyan"></span> 每日用电趋势</span>
+                            <span class="chart-hint" id="energyDailyHint"></span>
+                        </div>
+                        <div class="chart-body"><canvas id="dailyEnergyChart"></canvas></div>
+                    </div>
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot violet"></span> 月度用电 & 电费对比</span>
+                            <span class="chart-hint" id="energyMonthlyHint"></span>
+                        </div>
+                        <div class="chart-body"><canvas id="monthlyEnergyChart"></canvas></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════════ News ══════════ -->
+            <section class="page" id="page-news">
+                <div class="glass panel-pad news-head">
+                    <div class="news-head-left">
+                        <span class="panel-label" style="margin-bottom:0;"><span class="dot cyan"></span> 新闻动态</span>
+                        <span class="news-head-sub">AI / 科技热点 · GitHub 新奇项目 · 每日更新</span>
+                    </div>
+                    <span class="news-updated" id="newsUpdated">--</span>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot amber"></span> GitHub 新奇项目</span>
+                        <div class="gh-tabs" id="ghTabs">
+                            <button class="gh-tab active" data-since="daily">今日</button>
+                            <button class="gh-tab" data-since="weekly">本周</button>
+                            <button class="gh-tab" data-since="monthly">本月</button>
+                        </div>
+                    </div>
+                    <div class="gh-list" id="ghList">
+                        <div class="news-empty">正在加载…</div>
+                    </div>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot violet"></span> AI / 科技热点</span>
+                        <span class="chart-hint">Hacker News 热榜 · 点击查看原文</span>
+                    </div>
+                    <div class="news-list" id="newsList">
+                        <div class="news-empty">正在加载…</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ══════════ Config ══════════ -->
+            <section class="page" id="page-config">
+                <div class="glass panel-pad">
+                    <div class="panel-label"><span class="dot cyan"></span> 系统配置</div>
+                    <div class="config-body">
+                        <div class="config-item">
+                            <span class="config-label">MQTT Broker</span>
+                            <span class="config-value" id="cfg-mqtt">--</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">数据库</span>
+                            <span class="config-value" id="cfg-db">--</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">在线组件</span>
+                            <span class="config-value" id="cfg-components">加载中...</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">前端版本</span>
+                            <span class="config-value">2026.9 · 帅气版</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="config-label">系统状态</span>
+                            <span class="config-value" id="cfg-health">--</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>

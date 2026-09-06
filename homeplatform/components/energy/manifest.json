@@ -1,0 +1,6 @@
+{
+  "domain": "energy",
+  "name": "Energy Monitor",
+  "dependencies": ["sensor"],
+  "integration_type": "device"
+}

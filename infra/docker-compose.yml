@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: home-platform-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-home}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-home123}
+      POSTGRES_DB: ${POSTGRES_DB:-homeplatform}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-home} -d ${POSTGRES_DB:-homeplatform}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  broker:
+    image: eclipse-mosquitto:2
+    container_name: home-platform-broker
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+      - ./mosquitto/data:/mosquitto/data
+      - ./mosquitto/log:/mosquitto/log
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+
+  backend:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    container_name: home-platform-backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-home}:${POSTGRES_PASSWORD:-home123}@db:5432/${POSTGRES_DB:-homeplatform}
+      MQTT_BROKER_HOST: broker
+      MQTT_BROKER_PORT: 1883
+      MQTT_TOPIC: home/sensors/+/+
+      STATIC_DIR: /app/frontend
+      HOME_CONFIG_DIR: /app/config
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      broker:
+        condition: service_started
+    volumes:
+      - ../frontend:/app/frontend:ro
+      - ../config:/app/config:ro
+
+  # ── 国家电网电费数据采集 (本地验证码识别，无需 API Key) ─────────
+  sgcc_electricity:
+    image: ghcr.io/goxofy/95598-mqtt:main
+    container_name: sgcc-electricity
+    restart: unless-stopped
+    environment:
+      PHONE_NUMBER: ${SGCC_PHONE_NUMBER}
+      PASSWORD: ${SGCC_PASSWORD}
+      MQTT_BROKER: broker
+      MQTT_PORT: "1883"
+      JOB_START_TIME: "${SGCC_JOB_START_TIME:-07:00}"
+      SLIDER_OFFSET: "${SGCC_SLIDER_OFFSET:-8}"
+      IGNORE_USER_ID: "${SGCC_IGNORE_USER_ID:-}"
+    volumes:
+      - sgcc_data:/data
+      - sgcc_errors:/app/errors
+    depends_on:
+      - broker
+
+volumes:
+  db_data:
+  sgcc_data:
+  sgcc_errors:

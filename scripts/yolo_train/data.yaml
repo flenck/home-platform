@@ -1,0 +1,5 @@
+path: /Users/dufan2514897261/Documents/esp32corequanwuzhineng/scripts/yolo_train
+train: images/train
+val: images/val
+nc: 1
+names: ['target']

@@ -1,0 +1,7 @@
+{
+  "domain": "water_quality",
+  "name": "Water Quality Monitor",
+  "dependencies": ["sensor"],
+  "requirements": ["paho-mqtt"],
+  "integration_type": "device"
+}
