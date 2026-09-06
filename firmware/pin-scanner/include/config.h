@@ -7,7 +7,7 @@
 
 // 服务器 API（内网穿透公网地址；同一局域网内回落到服务器局域网IP，避免NAT回环问题）
 #define API_ENDPOINT "http://myhomegrid.cc.cd:8000/api/v1/readings"
-#define API_ENDPOINT_LAN "http://192.168.5.7:8000/api/v1/readings"
+#define API_ENDPOINT_LAN "http://<SERVER_IP>:8000/api/v1/readings"
 #define API_TOKEN "homeplatform"
 
 // Sensor identity
