@@ -52,6 +52,10 @@
                 <svg viewBox="0 0 24 24"><path d="M12 2a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm7 10c0-1.66-1.34-3-3-3H8c-1.66 0-3 1.34-3 3v1h14v-1zm-8.5 3.5h3v2h-3v-2zM7 17.5h10v2H7v-2zm-4.5-3.5v6a1 1 0 0 0 1 1h17a1 1 0 0 0 1-1v-6h-2v5h-15v-5h-2z"/></svg>
                 <span class="nav-label">宝宝</span>
             </a>
+            <a class="nav-item" data-page="finance" title="记账">
+                <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V6c0-1.11-.89-2-2-2zm0 14H4v-6h16v6zm0-10H4V6h16v2z"/></svg>
+                <span class="nav-label">记账</span>
+            </a>
         </nav>
 
         <div class="sidebar-footer">
@@ -366,6 +370,85 @@
                     <div class="baby-list" id="babyList">
                         <div class="news-empty">正在加载…</div>
                     </div>
+                </div>
+            </section>
+
+            <!-- ══════════ Finance (记账) ══════════ -->
+            <section class="page" id="page-finance">
+                <div class="kpi-grid" id="finance-kpis">
+                    <!-- finance KPI cards -->
+                </div>
+
+                <div class="glass panel-pad finance-entry-card">
+                    <div class="panel-label"><span class="dot amber"></span> 快速记账</div>
+                    <div class="finance-form" id="financeForm">
+                        <div class="finance-tabs" id="financeTabs">
+                            <button class="finance-tab active" data-ftype="expense">💸 支出</button>
+                            <button class="finance-tab" data-ftype="income">💰 收入</button>
+                            <button class="finance-tab" data-ftype="transfer">🔁 转账</button>
+                        </div>
+                        <div class="finance-fields">
+                            <input type="number" id="finAmount" class="fin-input fin-amount" placeholder="金额" min="0" step="0.01">
+                            <select id="finAccount" class="fin-input"></select>
+                            <select id="finTargetAccount" class="fin-input" style="display:none;"></select>
+                            <select id="finCategory" class="fin-input"></select>
+                            <input type="date" id="finDate" class="fin-input">
+                            <input type="text" id="finNote" class="fin-input fin-note" placeholder="备注（可选）">
+                            <button class="fin-btn" id="finSaveBtn">保存记账</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="finance-top-row">
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot amber"></span> 近 6 月收支趋势</span>
+                            <span class="chart-hint" id="finTrendHint"></span>
+                        </div>
+                        <div class="chart-body fin-trend-body"><canvas id="finTrendChart"></canvas></div>
+                    </div>
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot violet"></span> 本月分类支出</span>
+                            <span class="chart-hint" id="finCatHint"></span>
+                        </div>
+                        <div class="chart-body fin-cat-body"><canvas id="finCatChart"></canvas></div>
+                    </div>
+                </div>
+
+                <div class="finance-mid-row">
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot cyan"></span> 账户</span>
+                            <span class="chart-hint" id="finAccountHint"></span>
+                        </div>
+                        <div class="finance-accounts" id="finAccountsList"></div>
+                        <div class="fin-add-row">
+                            <input type="text" id="finNewAccount" class="fin-input" placeholder="新账户名称">
+                            <input type="number" id="finNewAccountBal" class="fin-input" placeholder="初始余额" step="0.01">
+                            <button class="fin-btn small" id="finAddAccountBtn">添加</button>
+                        </div>
+                    </div>
+                    <div class="glass chart-card">
+                        <div class="chart-head">
+                            <span class="panel-label"><span class="dot green"></span> 本月预算</span>
+                            <span class="chart-hint" id="finBudgetHint"></span>
+                        </div>
+                        <div id="finBudgetList" class="finance-budgets"></div>
+                        <div class="fin-add-row">
+                            <select id="finBudgetCat" class="fin-input"></select>
+                            <input type="number" id="finBudgetAmount" class="fin-input" placeholder="预算金额" step="0.01">
+                            <button class="fin-btn small" id="finSetBudgetBtn">设置</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot pink"></span> 最近交易</span>
+                        <span class="chart-hint" id="finTxHint"></span>
+                    </div>
+                    <div class="finance-tx-list" id="finTxList"></div>
                 </div>
             </section>
 

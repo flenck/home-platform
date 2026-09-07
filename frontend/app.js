@@ -49,6 +49,7 @@ const pageTitles = {
     energy: ["能耗", "电力消耗 · 费用洞察"],
     news: ["新闻", "AI / 科技热点 · GitHub 新奇项目"],
     baby: ["宝宝", "喂养 · 睡眠 · 成长记录"],
+    finance: ["记账", "收入 · 支出 · 预算（Firefly III 风格）"],
     config: ["配置", "系统参数"],
 };
 
@@ -69,6 +70,7 @@ document.querySelectorAll(".nav-item[data-page]").forEach(item => {
         if (page === "weather") { ensureTempChart(); fetchWeatherData(); }
         if (page === "news") fetchNewsData();
         if (page === "baby") { ensureBabyCharts(); renderBabyForm(); fetchBabyData(); }
+        if (page === "finance") { ensureFinanceCharts(); fetchFinanceData(); }
         if (page === "overview") renderOverviewHot();
         if (window.innerWidth <= 768) { sidebarOpen = false; updateSidebar(); }
     });
@@ -1445,14 +1447,304 @@ function toastMsg(msg, isErr = false) {
     bindBabyListEvents();
 })();
 
+// ── Finance (记账，参照 Firefly III) ──────────────────────────
+let finTrendChart = null;
+let finCatChart = null;
+let finAccounts = [];
+let finCategories = [];
+let finTxnType = "expense";
+
+function curFinMonth() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+}
+
+function ensureFinanceCharts() {
+    const trendCanvas = document.getElementById("finTrendChart");
+    if (trendCanvas && !finTrendChart) {
+        finTrendChart = new Chart(trendCanvas.getContext("2d"), {
+            type: "bar",
+            data: { labels: [], datasets: [
+                { label: "收入", data: [], backgroundColor: "rgba(52,211,153,0.55)", borderRadius: 5 },
+                { label: "支出", data: [], backgroundColor: "rgba(248,113,113,0.55)", borderRadius: 5 },
+            ] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: false, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    y: { beginAtZero: true, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, callback: v => fmtMoney(v) } },
+                },
+                plugins: { legend: { labels: { color: chartTick, font: axisFont } } },
+            },
+        });
+    }
+    const catCanvas = document.getElementById("finCatChart");
+    if (catCanvas && !finCatChart) {
+        finCatChart = new Chart(catCanvas.getContext("2d"), {
+            type: "doughnut",
+            data: { labels: [], datasets: [{ data: [], backgroundColor: [
+                "#f472b6", "#38bdf8", "#fbbf24", "#34d399", "#8b5cf6", "#f87171", "#a3d5e8", "#e1b98f", "#94d8c3", "#c9a7e8", "#eaa7b2", "#94d4d0"
+            ], borderWidth: 0 }] },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: "62%",
+                plugins: {
+                    legend: { position: "bottom", labels: { color: chartTick, font: axisFont, boxWidth: 10, boxHeight: 10, padding: 8 } },
+                    tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtMoney(ctx.parsed)}` } },
+                },
+            },
+        });
+    }
+}
+
+async function fetchFinanceData() {
+    try {
+        const month = curFinMonth();
+        const [summaryRes, trendRes, txRes, accRes, catRes] = await Promise.all([
+            fetch(`${API_BASE}/api/v1/finance/summary?month=${month}`),
+            fetch(`${API_BASE}/api/v1/finance/trend?months=6`),
+            fetch(`${API_BASE}/api/v1/finance/transactions?month=${month}&limit=100`),
+            fetch(`${API_BASE}/api/v1/finance/accounts`),
+            fetch(`${API_BASE}/api/v1/finance/categories`),
+        ]);
+        const summary = await summaryRes.json();
+        const trend = await trendRes.json();
+        const txs = (await txRes.json()).data || [];
+        finAccounts = await accRes.json();
+        finCategories = await catRes.json();
+        renderFinanceKpis(summary);
+        renderFinTrend(trend);
+        renderFinCat(summary);
+        renderFinAccounts();
+        renderFinBudgets(summary);
+        renderFinTxs(txs);
+        renderFinFormOptions();
+    } catch (err) {
+        console.error("Finance fetch error:", err);
+    }
+}
+
+function renderFinanceKpis(s) {
+    const grid = document.getElementById("finance-kpis");
+    if (!grid) return;
+    const saveRate = s.income > 0 ? Math.round((s.balance / s.income) * 100) : 0;
+    const catsTop = s.category_spend[0];
+    grid.innerHTML =
+        buildKpi({ icon: "💰", iconBg: "rgba(52,211,153,0.13)", iconColor: "#34d399", label: "本月收入", value: fmtMoney(s.income), unit: "", valueCls: "money-in", sub: `<span class="arrow">●</span> ${s.month}` }) +
+        buildKpi({ icon: "💸", iconBg: "rgba(248,113,113,0.13)", iconColor: "#f87171", label: "本月支出", value: fmtMoney(s.expense), unit: "", valueCls: "money-out", sub: catsTop ? `<span class="arrow">●</span> ${catsTop.icon} ${catsTop.name} ${fmtMoney(catsTop.spent)}` : "" }) +
+        buildKpi({ icon: "⚖️", iconBg: "rgba(139,92,246,0.13)", iconColor: "#8b5cf6", label: "本月结余", value: fmtMoney(s.balance), unit: "", valueCls: s.balance >= 0 ? "" : "warn", sub: s.income > 0 ? `<span class="arrow">●</span> 储蓄率 ${saveRate}%` : "" });
+}
+
+function fmtMoney(v) {
+    const n = Number(v);
+    if (isNaN(n)) return "¥0.00";
+    return "¥" + n.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderFinTrend(trend) {
+    if (!finTrendChart) return;
+    finTrendChart.data.labels = trend.map(t => t.month.slice(2).replace("-", "/"));
+    finTrendChart.data.datasets[0].data = trend.map(t => t.income);
+    finTrendChart.data.datasets[1].data = trend.map(t => t.expense);
+    finTrendChart.update();
+    const hint = document.getElementById("finTrendHint");
+    if (hint) hint.textContent = "柱状对比 · 含转账外收支";
+}
+
+function renderFinCat(summary) {
+    if (!finCatChart) return;
+    const cats = summary.category_spend || [];
+    finCatChart.data.labels = cats.map(c => `${c.icon} ${c.name}`);
+    finCatChart.data.datasets[0].data = cats.map(c => c.spent);
+    finCatChart.update();
+    const hint = document.getElementById("finCatHint");
+    if (hint) hint.textContent = cats.length ? `本月 ${cats.length} 个分类有支出` : "暂无支出记录";
+}
+
+function renderFinAccounts() {
+    const list = document.getElementById("finAccountsList");
+    if (!list) return;
+    list.innerHTML = finAccounts.map(a => `
+        <div class="fin-account-row">
+            <span class="fin-account-icon">${a.icon || "🏦"}</span>
+            <span class="fin-account-name">${esc(a.name)}</span>
+            <span class="fin-account-bal ${a.balance < 0 ? "warn" : ""}">${fmtMoney(a.balance)}</span>
+            <button class="fin-del" data-del-account="${a.id}" title="删除账户">✕</button>
+        </div>`).join("") || '<div class="fin-empty">暂无账户，先添加一个吧</div>';
+    list.querySelectorAll("[data-del-account]").forEach(btn => {
+        btn.onclick = async () => {
+            if (!confirm("确定删除该账户？")) return;
+            const res = await fetch(`${API_BASE}/api/v1/finance/accounts/${btn.dataset.delAccount}`, { method: "DELETE" });
+            if (!res.ok) { alert(res.status === 409 ? "该账户已有流水，不能删除" : "删除失败"); return; }
+            fetchFinanceData();
+        };
+    });
+    const hint = document.getElementById("finAccountHint");
+    if (hint) hint.textContent = `${finAccounts.length} 个账户 · 余额含初始与流水`;
+}
+
+function renderFinBudgets(summary) {
+    const list = document.getElementById("finBudgetList");
+    if (!list) return;
+    const budgets = summary.budgets || [];
+    list.innerHTML = budgets.map(b => {
+        const over = b.pct > 100;
+        const barColor = over ? "#f87171" : b.pct > 80 ? "#fbbf24" : "#34d399";
+        return `
+        <div class="fin-budget-row">
+            <div class="fin-budget-head">
+                <span class="fin-budget-name">${b.category_icon} ${esc(b.category_name)}</span>
+                <span class="fin-budget-num ${over ? "warn" : ""}">${fmtMoney(b.spent)} / ${fmtMoney(b.amount)}</span>
+            </div>
+            <div class="fin-budget-bar"><div class="fin-budget-fill" style="width:${Math.min(b.pct, 100)}%;background:${barColor}"></div></div>
+            <div class="fin-budget-pct ${over ? "warn" : ""}">${b.pct}%</div>
+        </div>`;
+    }).join("") || '<div class="fin-empty">本月还没有预算，下面设置一个吧（空分类=总预算）</div>';
+    const hint = document.getElementById("finBudgetHint");
+    if (hint) hint.textContent = `${budgets.length} 项预算 · 超支标红`;
+}
+
+function renderFinTxs(txs) {
+    const list = document.getElementById("finTxList");
+    if (!list) return;
+    list.innerHTML = txs.map(t => {
+        const sign = t.txn_type === "income" ? "+" : t.txn_type === "transfer" ? "⇄" : "-";
+        const cls = t.txn_type === "income" ? "money-in" : t.txn_type === "transfer" ? "tx-transfer" : "money-out";
+        const when = new Date(t.txn_date).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
+        const detail = t.txn_type === "transfer"
+            ? `${t.account_icon || ""} ${t.account_name} → ${t.target_account_name || "?"}`
+            : `${t.category_icon || ""} ${t.category_name || "未分类"} · ${t.account_name}`;
+        return `
+        <div class="fin-tx-row">
+            <span class="fin-tx-type fin-tx-${t.txn_type}">${t.txn_type === "income" ? "收" : t.txn_type === "transfer" ? "转" : "支"}</span>
+            <div class="fin-tx-main">
+                <div class="fin-tx-note">${esc(t.note || detail)}</div>
+                <div class="fin-tx-detail">${detail} · ${when}</div>
+            </div>
+            <span class="fin-tx-amount ${cls}">${sign}${fmtMoney(t.amount).replace("¥", "¥")}</span>
+            <button class="fin-del" data-del-tx="${t.id}" title="删除">✕</button>
+        </div>`;
+    }).join("") || '<div class="fin-empty">本月还没有交易记录</div>';
+    list.querySelectorAll("[data-del-tx]").forEach(btn => {
+        btn.onclick = async () => {
+            if (!confirm("确定删除这笔交易？")) return;
+            await fetch(`${API_BASE}/api/v1/finance/transactions/${btn.dataset.delTx}`, { method: "DELETE" });
+            fetchFinanceData();
+        };
+    });
+    const hint = document.getElementById("finTxHint");
+    if (hint) hint.textContent = `本月 ${txs.length} 笔 · 点击 ✕ 删除`;
+}
+
+function renderFinFormOptions() {
+    const accSel = document.getElementById("finAccount");
+    const tgtSel = document.getElementById("finTargetAccount");
+    const catSel = document.getElementById("finCategory");
+    if (accSel) accSel.innerHTML = finAccounts.map(a => `<option value="${a.id}">${a.icon || ""} ${esc(a.name)}</option>`).join("");
+    if (tgtSel) tgtSel.innerHTML = finAccounts.map(a => `<option value="${a.id}">${a.icon || ""} ${esc(a.name)}</option>`).join("");
+    if (catSel) catSel.innerHTML = finCategories.map(c => `<option value="${c.id}">${c.icon || ""} ${esc(c.name)}</option>`).join("");
+    const budgetCat = document.getElementById("finBudgetCat");
+    if (budgetCat) budgetCat.innerHTML = '<option value="">🎯 总预算</option>' + finCategories.map(c => `<option value="${c.id}">${c.icon || ""} ${esc(c.name)}</option>`).join("");
+    const dateInput = document.getElementById("finDate");
+    if (dateInput && !dateInput.value) {
+        const d = new Date();
+        dateInput.value = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+}
+
+function esc(s) {
+    return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+(function bindFinanceEvents() {
+    document.querySelectorAll("#financeTabs .finance-tab").forEach(btn => {
+        btn.addEventListener("click", () => {
+            document.querySelectorAll("#financeTabs .finance-tab").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            finTxnType = btn.dataset.ftype;
+            const tgt = document.getElementById("finTargetAccount");
+            const cat = document.getElementById("finCategory");
+            if (tgt) tgt.style.display = finTxnType === "transfer" ? "" : "none";
+            if (cat) cat.style.display = finTxnType === "transfer" ? "none" : "";
+        });
+    });
+
+    const saveBtn = document.getElementById("finSaveBtn");
+    if (saveBtn) saveBtn.addEventListener("click", async () => {
+        const amount = parseFloat(document.getElementById("finAmount").value);
+        const accountId = parseInt(document.getElementById("finAccount").value, 10);
+        if (!amount || amount <= 0 || !accountId) { alert("请填写金额并选择账户"); return; }
+        const payload = {
+            txn_type: finTxnType,
+            amount,
+            account_id: accountId,
+            note: document.getElementById("finNote").value.trim(),
+        };
+        if (finTxnType === "transfer") {
+            const targetId = parseInt(document.getElementById("finTargetAccount").value, 10);
+            if (!targetId || targetId === accountId) { alert("请选择不同的转账目标账户"); return; }
+            payload.target_account_id = targetId;
+        } else {
+            payload.category_id = parseInt(document.getElementById("finCategory").value, 10) || null;
+        }
+        const dateVal = document.getElementById("finDate").value;
+        if (dateVal) payload.txn_date = new Date(dateVal + "T12:00:00").toISOString();
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/finance/transactions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                alert("保存失败：" + (err.detail || res.status));
+                return;
+            }
+            document.getElementById("finAmount").value = "";
+            document.getElementById("finNote").value = "";
+            fetchFinanceData();
+        } catch (e) {
+            alert("网络错误：" + e.message);
+        }
+    });
+
+    const addAccBtn = document.getElementById("finAddAccountBtn");
+    if (addAccBtn) addAccBtn.addEventListener("click", async () => {
+        const name = document.getElementById("finNewAccount").value.trim();
+        if (!name) { alert("请输入账户名称"); return; }
+        const bal = parseFloat(document.getElementById("finNewAccountBal").value) || 0;
+        await fetch(`${API_BASE}/api/v1/finance/accounts`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, initial_balance: bal }),
+        });
+        document.getElementById("finNewAccount").value = "";
+        document.getElementById("finNewAccountBal").value = "";
+        fetchFinanceData();
+    });
+
+    const setBudgetBtn = document.getElementById("finSetBudgetBtn");
+    if (setBudgetBtn) setBudgetBtn.addEventListener("click", async () => {
+        const amount = parseFloat(document.getElementById("finBudgetAmount").value);
+        if (!amount || amount <= 0) { alert("请输入预算金额"); return; }
+        const catVal = document.getElementById("finBudgetCat").value;
+        await fetch(`${API_BASE}/api/v1/finance/budgets`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ month: curFinMonth(), category_id: catVal ? parseInt(catVal, 10) : null, amount }),
+        });
+        document.getElementById("finBudgetAmount").value = "";
+        fetchFinanceData();
+    });
+})();
+
 // ── Init ──────────────────────────────────────────────────────
 ensureTdsChart();
 ensureTempChart();
 ensureEnergyCharts();
 ensureBabyCharts();
+ensureFinanceCharts();
 fetchData();
 renderOverviewHot();
 fetchBabyData();
+fetchFinanceData();
 setInterval(fetchData, REFRESH_INTERVAL);
 
 // greet based on time of day

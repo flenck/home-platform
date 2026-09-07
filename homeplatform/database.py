@@ -542,3 +542,465 @@ async def get_baby_growth() -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+# ── Finance (记账，参照 Firefly III：账户/交易/分类/预算) ──────────────
+
+_DEFAULT_ACCOUNTS = [
+    ("银行卡", "asset", "💳"),
+    ("现金", "asset", "💵"),
+    ("支付宝", "asset", "📱"),
+    ("微信", "asset", "💬"),
+]
+
+_DEFAULT_CATEGORIES = [
+    ("餐饮", "🍜"),
+    ("交通", "🚌"),
+    ("购物", "🛒"),
+    ("医疗", "💊"),
+    ("水电燃气", "💡"),
+    ("住房", "🏠"),
+    ("娱乐", "🎮"),
+    ("教育", "📚"),
+    ("人情往来", "🎁"),
+    ("工资", "💰"),
+    ("理财收益", "📈"),
+    ("其他", "📦"),
+]
+
+
+async def ensure_finance_tables() -> None:
+    """Create finance tables if they do not exist, seeding defaults."""
+    pool = _ensure_pool()
+    if pool is None:
+        return
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_accounts (
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                type TEXT NOT NULL DEFAULT 'asset',
+                icon TEXT,
+                initial_balance NUMERIC(12, 2) NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_categories (
+                id BIGSERIAL PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                icon TEXT,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_transactions (
+                id BIGSERIAL PRIMARY KEY,
+                txn_type TEXT NOT NULL CHECK (txn_type IN ('expense', 'income', 'transfer')),
+                amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
+                account_id BIGINT NOT NULL REFERENCES finance_accounts(id),
+                target_account_id BIGINT REFERENCES finance_accounts(id),
+                category_id BIGINT REFERENCES finance_categories(id),
+                note TEXT,
+                txn_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+            """
+        )
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finance_budgets (
+                id BIGSERIAL PRIMARY KEY,
+                month TEXT NOT NULL,
+                category_id BIGINT REFERENCES finance_categories(id),
+                amount NUMERIC(12, 2) NOT NULL CHECK (amount >= 0),
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (month, category_id)
+            )
+            """
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fin_tx_date ON finance_transactions (txn_date DESC)"
+        )
+        await conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_fin_tx_type ON finance_transactions (txn_type, txn_date DESC)"
+        )
+        # 种子数据：默认账户与分类
+        for name, typ, icon in _DEFAULT_ACCOUNTS:
+            await conn.execute(
+                "INSERT INTO finance_accounts (name, type, icon) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                name,
+                typ,
+                icon,
+            )
+        for name, icon in _DEFAULT_CATEGORIES:
+            await conn.execute(
+                "INSERT INTO finance_categories (name, icon) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+                name,
+                icon,
+            )
+        _LOGGER.info("finance tables ready")
+
+
+async def list_finance_accounts() -> list[dict[str, Any]]:
+    pool = _ensure_pool()
+    if pool is None:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT a.id, a.name, a.type, a.icon, a.initial_balance,
+                   COALESCE(SUM(CASE WHEN t.txn_type = 'income' AND t.account_id = a.id THEN t.amount
+                                     WHEN t.txn_type = 'transfer' AND t.target_account_id = a.id THEN t.amount
+                                     ELSE 0 END)
+                          - SUM(CASE WHEN t.txn_type = 'expense' AND t.account_id = a.id THEN t.amount
+                                     WHEN t.txn_type = 'transfer' AND t.account_id = a.id THEN t.amount
+                                     ELSE 0 END), 0) AS flow_balance
+            FROM finance_accounts a
+            LEFT JOIN finance_transactions t ON t.account_id = a.id OR t.target_account_id = a.id
+            GROUP BY a.id
+            ORDER BY a.id
+            """
+        )
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["initial_balance"] = float(row["initial_balance"] or 0)
+        item["flow_balance"] = float(row["flow_balance"] or 0)
+        item["balance"] = round(item["initial_balance"] + item["flow_balance"], 2)
+        result.append(item)
+    return result
+
+
+async def insert_finance_account(name: str, icon: str | None = None, initial_balance: float = 0) -> int | None:
+    pool = _ensure_pool()
+    if pool is None:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO finance_accounts (name, icon, initial_balance) VALUES ($1, $2, $3) RETURNING id",
+            name.strip(),
+            icon or None,
+            round(float(initial_balance or 0), 2),
+        )
+    return row["id"] if row else None
+
+
+async def delete_finance_account(account_id: int) -> bool:
+    pool = _ensure_pool()
+    if pool is None:
+        return False
+    async with pool.acquire() as conn:
+        used = await conn.fetchval("SELECT 1 FROM finance_transactions WHERE account_id = $1 OR target_account_id = $1 LIMIT 1", account_id)
+        if used:
+            return False  # 有流水不能删
+        row = await conn.fetchrow("DELETE FROM finance_accounts WHERE id = $1 RETURNING id", account_id)
+    return row is not None
+
+
+async def list_finance_categories() -> list[dict[str, Any]]:
+    pool = _ensure_pool()
+    if pool is None:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            "SELECT id, name, icon, created_at FROM finance_categories ORDER BY id"
+        )
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["created_at"] = row["created_at"].isoformat() if row["created_at"] else None
+        result.append(item)
+    return result
+
+
+async def insert_finance_category(name: str, icon: str | None = None) -> int | None:
+    pool = _ensure_pool()
+    if pool is None:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "INSERT INTO finance_categories (name, icon) VALUES ($1, $2) RETURNING id",
+            name.strip(),
+            icon or None,
+        )
+    return row["id"] if row else None
+
+
+async def delete_finance_category(category_id: int) -> bool:
+    pool = _ensure_pool()
+    if pool is None:
+        return False
+    async with pool.acquire() as conn:
+        used = await conn.fetchval("SELECT 1 FROM finance_transactions WHERE category_id = $1 LIMIT 1", category_id)
+        if used:
+            return False
+        row = await conn.fetchrow("DELETE FROM finance_categories WHERE id = $1 RETURNING id", category_id)
+    return row is not None
+
+
+async def insert_finance_transaction(
+    txn_type: str,
+    amount: float,
+    account_id: int,
+    target_account_id: int | None = None,
+    category_id: int | None = None,
+    note: str | None = None,
+    txn_date: Any = None,
+) -> int | None:
+    pool = _ensure_pool()
+    if pool is None:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO finance_transactions
+                (txn_type, amount, account_id, target_account_id, category_id, note, txn_date)
+            VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, now()))
+            RETURNING id
+            """,
+            txn_type,
+            round(float(amount), 2),
+            account_id,
+            target_account_id,
+            category_id,
+            note or None,
+            _parse_dt(txn_date),
+        )
+    return row["id"] if row else None
+
+
+async def list_finance_transactions(month: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+    pool = _ensure_pool()
+    if pool is None:
+        return []
+    async with pool.acquire() as conn:
+        if month:
+            rows = await conn.fetch(
+                """
+                SELECT t.id, t.txn_type, t.amount, t.account_id, t.target_account_id, t.category_id,
+                       t.note, t.txn_date,
+                       a.name AS account_name, a.icon AS account_icon,
+                       ta.name AS target_account_name,
+                       c.name AS category_name, c.icon AS category_icon
+                FROM finance_transactions t
+                JOIN finance_accounts a ON a.id = t.account_id
+                LEFT JOIN finance_accounts ta ON ta.id = t.target_account_id
+                LEFT JOIN finance_categories c ON c.id = t.category_id
+                WHERE to_char(t.txn_date AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM') = $1
+                ORDER BY t.txn_date DESC, t.id DESC
+                LIMIT $2
+                """,
+                month,
+                limit,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT t.id, t.txn_type, t.amount, t.account_id, t.target_account_id, t.category_id,
+                       t.note, t.txn_date,
+                       a.name AS account_name, a.icon AS account_icon,
+                       ta.name AS target_account_name,
+                       c.name AS category_name, c.icon AS category_icon
+                FROM finance_transactions t
+                JOIN finance_accounts a ON a.id = t.account_id
+                LEFT JOIN finance_accounts ta ON ta.id = t.target_account_id
+                LEFT JOIN finance_categories c ON c.id = t.category_id
+                ORDER BY t.txn_date DESC, t.id DESC
+                LIMIT $1
+                """,
+                limit,
+            )
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["amount"] = float(row["amount"])
+        item["txn_date"] = row["txn_date"].isoformat() if row["txn_date"] else None
+        result.append(item)
+    return result
+
+
+async def delete_finance_transaction(txn_id: int) -> bool:
+    pool = _ensure_pool()
+    if pool is None:
+        return False
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("DELETE FROM finance_transactions WHERE id = $1 RETURNING id", txn_id)
+    return row is not None
+
+
+async def get_finance_summary(month: str | None = None) -> dict[str, Any]:
+    """Monthly income/expense/balance + per-category spend + budget progress."""
+    pool = _ensure_pool()
+    if pool is None:
+        return {}
+    if not month:
+        month = datetime.now(timezone.utc).astimezone().strftime("%Y-%m")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT
+              COALESCE(SUM(CASE WHEN txn_type = 'income' THEN amount ELSE 0 END), 0) AS income,
+              COALESCE(SUM(CASE WHEN txn_type = 'expense' THEN amount ELSE 0 END), 0) AS expense
+            FROM finance_transactions
+            WHERE to_char(txn_date AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM') = $1
+            """,
+            month,
+        )
+        cats = await conn.fetch(
+            """
+            SELECT c.id, c.name, c.icon, COALESCE(SUM(t.amount), 0) AS spent
+            FROM finance_categories c
+            JOIN finance_transactions t ON t.category_id = c.id AND t.txn_type = 'expense'
+            WHERE to_char(t.txn_date AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM') = $1
+            GROUP BY c.id
+            ORDER BY spent DESC
+            """,
+            month,
+        )
+        budgets = await conn.fetch(
+            """
+            SELECT b.id, b.month, b.category_id, b.amount, c.name AS category_name, c.icon AS category_icon
+            FROM finance_budgets b
+            LEFT JOIN finance_categories c ON c.id = b.category_id
+            WHERE b.month = $1
+            ORDER BY b.category_id NULLS FIRST
+            """,
+            month,
+        )
+    income = float(row["income"] or 0)
+    expense = float(row["expense"] or 0)
+    # 预算执行：总预算与分类预算
+    budget_items = []
+    total_budget = 0.0
+    for b in budgets:
+        amt = float(b["amount"] or 0)
+        total_budget += amt
+        spent = 0.0
+        if b["category_id"] is None:
+            spent = expense
+        else:
+            for c in cats:
+                if c["id"] == b["category_id"]:
+                    spent = float(c["spent"])
+                    break
+        budget_items.append(
+            {
+                "id": b["id"],
+                "category_id": b["category_id"],
+                "category_name": b["category_name"] or "总预算",
+                "category_icon": b["category_icon"] or "🎯",
+                "amount": amt,
+                "spent": round(spent, 2),
+                "pct": round(spent / amt * 100, 1) if amt else 0,
+            }
+        )
+    return {
+        "month": month,
+        "income": round(income, 2),
+        "expense": round(expense, 2),
+        "balance": round(income - expense, 2),
+        "category_spend": [
+            {"id": c["id"], "name": c["name"], "icon": c["icon"], "spent": round(float(c["spent"]), 2)}
+            for c in cats
+        ],
+        "budgets": budget_items,
+    }
+
+
+async def get_finance_trend(months: int = 6) -> list[dict[str, Any]]:
+    """Income/expense per month for the last N months (transfers excluded)."""
+    pool = _ensure_pool()
+    if pool is None:
+        return []
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT to_char(series.m, 'YYYY-MM') AS month,
+                   COALESCE(SUM(CASE WHEN t.txn_type = 'income' THEN t.amount ELSE 0 END), 0) AS income,
+                   COALESCE(SUM(CASE WHEN t.txn_type = 'expense' THEN t.amount ELSE 0 END), 0) AS expense
+            FROM generate_series(
+                date_trunc('month', now() AT TIME ZONE 'Asia/Shanghai') - make_interval(months => $1 - 1),
+                date_trunc('month', now() AT TIME ZONE 'Asia/Shanghai'),
+                interval '1 month'
+            ) AS series(m)
+            LEFT JOIN finance_transactions t
+              ON date_trunc('month', t.txn_date AT TIME ZONE 'Asia/Shanghai') = series.m
+            GROUP BY series.m
+            ORDER BY series.m
+            """,
+            months,
+        )
+    result = []
+    for row in rows:
+        result.append(
+            {
+                "month": row["month"],
+                "income": round(float(row["income"] or 0), 2),
+                "expense": round(float(row["expense"] or 0), 2),
+            }
+        )
+    return result
+
+
+async def upsert_finance_budget(month: str, category_id: int | None, amount: float) -> int | None:
+    pool = _ensure_pool()
+    if pool is None:
+        return None
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO finance_budgets (month, category_id, amount)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (month, category_id) DO UPDATE SET amount = EXCLUDED.amount
+            RETURNING id
+            """,
+            month,
+            category_id,
+            round(float(amount), 2),
+        )
+    return row["id"] if row else None
+
+
+async def list_finance_budgets(month: str | None = None) -> list[dict[str, Any]]:
+    pool = _ensure_pool()
+    if pool is None:
+        return []
+    async with pool.acquire() as conn:
+        if month:
+            rows = await conn.fetch(
+                """
+                SELECT b.id, b.month, b.category_id, b.amount, c.name AS category_name, c.icon AS category_icon
+                FROM finance_budgets b LEFT JOIN finance_categories c ON c.id = b.category_id
+                WHERE b.month = $1 ORDER BY b.category_id NULLS FIRST
+                """,
+                month,
+            )
+        else:
+            rows = await conn.fetch(
+                """
+                SELECT b.id, b.month, b.category_id, b.amount, c.name AS category_name, c.icon AS category_icon
+                FROM finance_budgets b LEFT JOIN finance_categories c ON c.id = b.category_id
+                ORDER BY b.month DESC, b.category_id NULLS FIRST
+                """
+            )
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["amount"] = float(row["amount"])
+        result.append(item)
+    return result
+
+
+async def delete_finance_budget(budget_id: int) -> bool:
+    pool = _ensure_pool()
+    if pool is None:
+        return False
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("DELETE FROM finance_budgets WHERE id = $1 RETURNING id", budget_id)
+    return row is not None

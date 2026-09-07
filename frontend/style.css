@@ -664,3 +664,87 @@ body {
     .baby-item-note { flex-basis: 100%; margin-left: 42px; }
     .baby-del { opacity: 1; }
 }
+
+/* ── Finance (记账) ─────────────────────────────────────────── */
+.finance-entry-card { margin-bottom: 16px; }
+
+.finance-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.finance-tab {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text-dim); font-size: 13px; font-weight: 600;
+    padding: 7px 18px; border-radius: 999px; cursor: pointer;
+    transition: all var(--tr);
+}
+.finance-tab:hover { color: var(--text); border-color: rgba(251,191,36,0.4); }
+.finance-tab.active { background: rgba(251,191,36,0.12); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
+
+.finance-fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.fin-input {
+    background: var(--bg-soft); border: 1px solid var(--border);
+    color: var(--text); border-radius: 10px; padding: 8px 12px;
+    font-size: 13px; outline: none; min-width: 0;
+    transition: border-color var(--tr);
+}
+.fin-input:focus { border-color: rgba(251,191,36,0.5); }
+select.fin-input { cursor: pointer; }
+.fin-amount { width: 110px; }
+.fin-note { flex: 1 1 160px; }
+.fin-btn {
+    background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #141414;
+    border: none; border-radius: 10px; padding: 9px 20px;
+    font-size: 13px; font-weight: 700; cursor: pointer; transition: opacity var(--tr);
+}
+.fin-btn:hover { opacity: 0.85; }
+.fin-btn.small { padding: 7px 14px; font-size: 12px; }
+
+.finance-top-row { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+.finance-mid-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.fin-trend-body { height: 280px; }
+.fin-cat-body { height: 280px; }
+
+.fin-account-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 4px; border-bottom: 1px solid var(--border);
+}
+.fin-account-row:last-child { border-bottom: none; }
+.fin-account-icon { font-size: 16px; }
+.fin-account-name { flex: 1; font-size: 13px; color: var(--text); }
+.fin-account-bal { font-size: 14px; font-weight: 700; color: #34d399; }
+.fin-del {
+    background: transparent; border: none; color: var(--text-faint);
+    font-size: 12px; cursor: pointer; padding: 4px 6px; border-radius: 6px;
+}
+.fin-del:hover { color: #f87171; background: rgba(248,113,113,0.12); }
+.fin-add-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.fin-add-row .fin-input { flex: 1 1 120px; }
+
+.fin-budget-row { padding: 8px 4px; }
+.fin-budget-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 10px; }
+.fin-budget-name { font-size: 13px; color: var(--text); }
+.fin-budget-num { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+.fin-budget-bar { height: 7px; border-radius: 999px; background: var(--bg-soft); overflow: hidden; }
+.fin-budget-fill { height: 100%; border-radius: 999px; transition: width 0.6s var(--tr); }
+.fin-budget-pct { font-size: 11px; color: var(--text-faint); margin-top: 4px; text-align: right; }
+
+.fin-tx-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border); }
+.fin-tx-row:last-child { border-bottom: none; }
+.fin-tx-type {
+    width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+}
+.fin-tx-expense { background: rgba(248,113,113,0.14); color: #f87171; }
+.fin-tx-income { background: rgba(52,211,153,0.14); color: #34d399; }
+.fin-tx-transfer { background: rgba(59,130,246,0.14); color: #60a5fa; }
+.fin-tx-main { flex: 1; min-width: 0; }
+.fin-tx-note { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-tx-detail { font-size: 11px; color: var(--text-faint); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fin-tx-amount { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.money-in { color: #34d399 !important; }
+.money-out { color: #f87171 !important; }
+.tx-transfer { color: #60a5fa !important; }
+.fin-empty { padding: 16px 4px; color: var(--text-faint); font-size: 13px; text-align: center; }
+
+@media (max-width: 900px) {
+    .finance-top-row, .finance-mid-row { grid-template-columns: 1fr; }
+}

@@ -11,8 +11,13 @@ from .const import DEFAULT_API_TOKEN
 from .database import (
     close_db,
     delete_baby_record,
+    delete_finance_account,
+    delete_finance_budget,
+    delete_finance_category,
+    delete_finance_transaction,
     end_baby_sleep,
     ensure_baby_tables,
+    ensure_finance_tables,
     get_baby_growth,
     get_baby_records,
     get_baby_summary,
@@ -20,11 +25,21 @@ from .database import (
     get_energy_daily,
     get_energy_monthly,
     get_energy_summary,
+    get_finance_summary,
+    get_finance_trend,
     get_latest_readings,
     init_db,
     insert_baby_record,
+    insert_finance_account,
+    insert_finance_category,
+    insert_finance_transaction,
+    list_finance_accounts,
+    list_finance_budgets,
+    list_finance_categories,
+    list_finance_transactions,
     setup_recorder,
     start_baby_sleep,
+    upsert_finance_budget,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -314,6 +329,205 @@ async def baby_record_delete(record_id: int) -> dict[str, Any]:
     return {"ok": True}
 
 
+# ── Finance (记账：账户/交易/分类/预算，参照 Firefly III) ───────────────
+
+
+@router.get("/finance/summary")
+async def finance_summary(
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+) -> dict[str, Any]:
+    """Monthly income/expense/balance + category spend + budget progress."""
+    return await get_finance_summary(month)
+
+
+@router.get("/finance/trend")
+async def finance_trend(months: int = Query(6, ge=2, le=24)) -> list[dict[str, Any]]:
+    """Income/expense trend per month."""
+    return await get_finance_trend(months)
+
+
+@router.get("/finance/accounts")
+async def finance_accounts() -> list[dict[str, Any]]:
+    """List accounts with current balance."""
+    return await list_finance_accounts()
+
+
+@router.post("/finance/accounts")
+async def finance_account_create(request: Request) -> dict[str, Any]:
+    """Create an account: {name, icon?, initial_balance?}."""
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name required")
+    try:
+        bal = float(body.get("initial_balance") or 0)
+    except (TypeError, ValueError):
+        bal = 0.0
+    account_id = await insert_finance_account(
+        name,
+        str(body.get("icon") or "") or None,
+        bal,
+    )
+    if account_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": account_id, "ok": True}
+
+
+@router.delete("/finance/accounts/{account_id}")
+async def finance_account_delete(account_id: int) -> dict[str, Any]:
+    """Delete an account (only if it has no transactions)."""
+    if not await delete_finance_account(account_id):
+        raise HTTPException(status_code=409, detail="account in use or not found")
+    return {"ok": True}
+
+
+@router.get("/finance/categories")
+async def finance_categories() -> list[dict[str, Any]]:
+    """List categories."""
+    return await list_finance_categories()
+
+
+@router.post("/finance/categories")
+async def finance_category_create(request: Request) -> dict[str, Any]:
+    """Create a category: {name, icon?}."""
+    body = await request.json()
+    name = str(body.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="name required")
+    category_id = await insert_finance_category(name, str(body.get("icon") or "") or None)
+    if category_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": category_id, "ok": True}
+
+
+@router.delete("/finance/categories/{category_id}")
+async def finance_category_delete(category_id: int) -> dict[str, Any]:
+    """Delete a category (only if unused)."""
+    if not await delete_finance_category(category_id):
+        raise HTTPException(status_code=409, detail="category in use or not found")
+    return {"ok": True}
+
+
+@router.get("/finance/transactions")
+async def finance_transactions(
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    limit: int = Query(100, ge=1, le=500),
+) -> dict[str, Any]:
+    """List transactions, newest first."""
+    data = await list_finance_transactions(month=month, limit=limit)
+    return {"data": data}
+
+
+@router.post("/finance/transactions")
+async def finance_transaction_create(request: Request) -> dict[str, Any]:
+    """Create a transaction.
+
+    Body:
+      {
+        "txn_type": "expense|income|transfer",
+        "amount": number (>0),
+        "account_id": int,
+        "target_account_id": int (required for transfer),
+        "category_id": int | null,
+        "note": str | null,
+        "txn_date": ISO8601 | null (default now)
+      }
+    """
+    body = await request.json()
+    txn_type = str(body.get("txn_type") or "").strip().lower()
+    if txn_type not in ("expense", "income", "transfer"):
+        raise HTTPException(status_code=422, detail="invalid txn_type")
+    try:
+        amount = float(body.get("amount"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="invalid amount")
+    if amount <= 0:
+        raise HTTPException(status_code=422, detail="amount must be > 0")
+    try:
+        account_id = int(body.get("account_id"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="invalid account_id")
+    target_account_id = None
+    if txn_type == "transfer":
+        try:
+            target_account_id = int(body.get("target_account_id"))
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="invalid target_account_id")
+        if target_account_id == account_id:
+            raise HTTPException(status_code=422, detail="target must differ from account")
+    category_id = None
+    raw_cat = body.get("category_id")
+    if raw_cat not in (None, "", "null"):
+        try:
+            category_id = int(raw_cat)
+        except (TypeError, ValueError):
+            category_id = None
+
+    txn_id = await insert_finance_transaction(
+        txn_type=txn_type,
+        amount=amount,
+        account_id=account_id,
+        target_account_id=target_account_id,
+        category_id=category_id,
+        note=str(body.get("note") or "") or None,
+        txn_date=body.get("txn_date"),
+    )
+    if txn_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": txn_id, "ok": True}
+
+
+@router.delete("/finance/transactions/{txn_id}")
+async def finance_transaction_delete(txn_id: int) -> dict[str, Any]:
+    """Delete a transaction by id."""
+    if not await delete_finance_transaction(txn_id):
+        raise HTTPException(status_code=404, detail="transaction not found")
+    return {"ok": True}
+
+
+@router.get("/finance/budgets")
+async def finance_budgets(
+    month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+) -> list[dict[str, Any]]:
+    """List budgets for a month (or all)."""
+    return await list_finance_budgets(month)
+
+
+@router.post("/finance/budgets")
+async def finance_budget_upsert(request: Request) -> dict[str, Any]:
+    """Create/update a budget: {month: YYYY-MM, category_id: int|null, amount: number}."""
+    body = await request.json()
+    month = str(body.get("month") or "").strip()
+    if not month or len(month) != 7:
+        raise HTTPException(status_code=422, detail="invalid month")
+    try:
+        amount = float(body.get("amount"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="invalid amount")
+    if amount < 0:
+        raise HTTPException(status_code=422, detail="amount must be >= 0")
+    category_id = body.get("category_id")
+    if category_id in (None, "", "null"):
+        category_id = None
+    else:
+        try:
+            category_id = int(category_id)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="invalid category_id")
+    budget_id = await upsert_finance_budget(month, category_id, amount)
+    if budget_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": budget_id, "ok": True}
+
+
+@router.delete("/finance/budgets/{budget_id}")
+async def finance_budget_delete(budget_id: int) -> dict[str, Any]:
+    """Delete a budget by id."""
+    if not await delete_finance_budget(budget_id):
+        raise HTTPException(status_code=404, detail="budget not found")
+    return {"ok": True}
+
+
 # ── App factory ────────────────────────────────────────────────────────────
 
 
@@ -334,6 +548,7 @@ def create_app(hass: Any) -> Any:
         try:
             await init_db()
             await ensure_baby_tables()
+            await ensure_finance_tables()
             setup_recorder(hass)
         except Exception:
             _LOGGER.warning("Database unavailable, running without persistence")
