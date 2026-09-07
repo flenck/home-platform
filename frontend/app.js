@@ -1073,17 +1073,15 @@ function renderSleepChart(records) {
         const has = segs.length > 0;
         colsHtml += '<div class="tl-col"><div class="tl-body">' + barsHtml + '</div><div class="tl-date' + (has ? " has" : "") + '">' + days[i] + "</div></div>";
     }
+    // 列容器高度 = 图高 + 日期行高（日期 x 轴在底部，不溢出遮挡）
+    const DATE_H = 28;
     host.innerHTML =
         '<div class="sleep-timeline">' +
         '<div class="tl-scale" style="width:' + SCALE_W + 'px;height:' + H_PX + 'px">' + scaleHtml + "</div>" +
-        '<div class="tl-cols" style="height:' + H_PX + 'px">' + colsHtml + "</div>" +
-        "</div>" +
-        '<div class="tl-axis">' +
-        '<div style="width:' + SCALE_W + 'px"></div>' +
-        '<div class="tl-cols"><div class="tl-axis-note">纵轴为 24 小时时刻（每 2 小时一格）· 竖条 = 当天入睡→醒来 · 悬停看详情</div></div>' +
+        '<div class="tl-cols" style="height:' + (H_PX + DATE_H) + 'px">' + colsHtml + "</div>" +
         "</div>";
     const hint = document.getElementById("sleepHint");
-    if (hint) hint.textContent = "近 14 天共 " + segCount + " 段睡眠 · 纵向条为入睡→醒来时间";
+    if (hint) hint.textContent = "近 14 天共 " + segCount + " 段睡眠 · 纵向条为入睡→醒来时间（悬停看详情）";
 }
 
 function renderFeedTimeChart(records) {
