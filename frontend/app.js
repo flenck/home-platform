@@ -870,17 +870,44 @@ function ensureBabyCharts() {
             data: {
                 labels: [],
                 datasets: [
-                    { label: "睡眠 (h)", data: [], backgroundColor: "rgba(139,92,246,0.45)", borderColor: "#8b5cf6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22 },
+                    {
+                        label: "睡眠", data: [], stack: "sleep",
+                        backgroundColor: "rgba(139,92,246,0.55)", borderColor: "#8b5cf6",
+                        borderWidth: 1, borderRadius: 6,
+                        barPercentage: 0.62, categoryPercentage: 0.85,
+                    },
                 ],
             },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 interaction: { intersect: false, mode: "index" },
+                indexAxis: "y",
                 scales: {
-                    x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
-                    y: { beginAtZero: true, position: "left", title: { display: true, text: "小时", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    x: {
+                        type: "linear", min: 0, max: 24, stacked: true,
+                        title: { display: true, text: "时刻（点）", color: chartTick },
+                        grid: { color: chartGrid },
+                        ticks: { color: chartTick, font: axisFont, stepSize: 3, callback: function (v) { return String(v).padStart(2, "0") + ":00"; } },
+                    },
+                    y: { grid: { display: false }, ticks: { color: chartTick, font: axisFont } },
                 },
-                plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
+                plugins: {
+                    legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                        backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1,
+                        titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: false,
+                        callbacks: {
+                            title: function (items) { return items[0] ? items[0].label : ""; },
+                            label: function (ctx) {
+                                const raw = ctx.raw;
+                                if (!raw || !Array.isArray(raw.x)) return "";
+                                const f = function (h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
+                                const dur = Math.round((raw.x[1] - raw.x[0]) * 10) / 10;
+                                return "睡眠 " + f(raw.x[0]) + " → " + f(raw.x[1]) + "（" + dur + " 小时）";
+                            },
+                        },
+                    },
+                },
             },
         });
     }
@@ -1019,25 +1046,56 @@ function renderFeedCountChart(records) {
 
 function renderSleepChart(records) {
     if (!sleepChart) return;
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
+    // 近 14 天（含今天），按日期倒序（最新在顶部）
+    const days = []; const dayIdx = new Map();
+    for (let i = 13; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        days.push(d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+        const key = fmtBabyDate(d);
+        days.push(key);
+        dayIdx.set(key, i);
     }
-    const sleep = new Map(days.map(d => [d, 0]));
+    // 每条睡眠记录 → 浮条 [startHour, endHour]，跨天记录自动拆分
+    const byDay = new Map(); // idx -> [{start, end}]
+    let segCount = 0;
     for (const r of records) {
         if (r.record_type !== "sleep" || !r.end_time) continue;
-        const d = fmtBabyDate(r.start_time);
-        if (!sleep.has(d)) continue;
-        const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
-        if (h > 0 && h < 24) sleep.set(d, sleep.get(d) + h);
+        let st = new Date(r.start_time), en = new Date(r.end_time);
+        if (isNaN(st) || isNaN(en) || en <= st) continue;
+        while (st < en) {
+            const key = fmtBabyDate(st);
+            const idx = dayIdx.get(key);
+            const dayStart = new Date(st); dayStart.setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayStart); dayEnd.setDate(dayEnd.getDate() + 1);
+            const segEnd = en < dayEnd ? en : dayEnd;
+            const h1 = (st - dayStart) / 3600000;
+            const h2 = (segEnd - dayStart) / 3600000;
+            if (idx !== undefined && h2 - h1 > 0.02) {
+                if (!byDay.has(idx)) byDay.set(idx, []);
+                byDay.get(idx).push({ start: Math.round(h1 * 100) / 100, end: Math.round(h2 * 100) / 100 });
+                segCount++;
+            }
+            st = segEnd;
+        }
+    }
+    // 组装数据（同一天多段合并相邻段后全部平铺，stacked 浮条同排堆叠）
+    const flat = [];
+    for (let i = 0; i < days.length; i++) {
+        const list = (byDay.get(i) || []).sort((a, b) => a.start - b.start);
+        const merged = [];
+        for (const s of list) {
+            if (merged.length && s.start <= merged[merged.length - 1].end + 0.05) {
+                merged[merged.length - 1].end = Math.max(merged[merged.length - 1].end, s.end);
+            } else {
+                merged.push({ start: s.start, end: s.end });
+            }
+        }
+        for (const m of merged) flat.push({ y: i, x: [m.start, m.end] });
     }
     sleepChart.data.labels = days;
-    sleepChart.data.datasets[0].data = days.map(d => Math.round(sleep.get(d) * 10) / 10);
+    sleepChart.data.datasets[0].data = flat;
     sleepChart.update("none");
-    const sleepTotal = days.reduce((a, d) => a + sleep.get(d), 0);
-    setText("sleepHint", `7 天共睡 ${fmt(sleepTotal, 1)} 小时`);
+    setText("sleepHint", `近 14 天共 ${segCount} 段睡眠 · 横向条为入睡→醒来时间`);
 }
 
 function renderFeedTimeChart(records) {
