@@ -884,7 +884,7 @@ function ensureBabyCharts() {
                 interaction: { intersect: false, mode: "nearest" },
                 scales: {
                     x: { type: "category", title: { display: true, text: "日期", color: chartTick }, grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
-                    y: { beginAtZero: true, max: 24, position: "left", title: { display: true, text: "时刻 (点)", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, stepSize: 2, callback: function (v) { return v; } } },
+                    y: { beginAtZero: true, max: 24, position: "left", title: { display: true, text: "时刻 (点)", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, stepSize: 2, autoSkip: false, callback: function (v) { return v; } } },
                 },
                 plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(244,114,182,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true, callbacks: { title: function (items) { return items[0] && items[0].raw && items[0].raw.x ? String(items[0].raw.x) : ""; }, label: function (ctx) { const d = ctx.raw || {}; const hh = Math.floor(d.y), mm = Math.round((d.y - hh) * 60); const t = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); const amt = d.amount !== null ? " · " + d.amount + " ml" : ""; return ctx.dataset.label + " " + t + amt; } } } },
             },
