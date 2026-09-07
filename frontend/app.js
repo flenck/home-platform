@@ -832,7 +832,7 @@ function ensureBabyCharts() {
             data: {
                 labels: [],
                 datasets: [
-                    { label: "喂奶 (ml)", data: [], type: "bar", backgroundColor: "rgba(244,114,182,0.45)", borderColor: "#f472b6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22, yAxisID: "y" },
+                    { label: "喂奶 (次)", data: [], type: "bar", backgroundColor: "rgba(244,114,182,0.45)", borderColor: "#f472b6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22, yAxisID: "y" },
                     { label: "睡眠 (h)", data: [], type: "line", borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: "#8b5cf6", borderWidth: 2, yAxisID: "y1" },
                 ],
             },
@@ -841,7 +841,7 @@ function ensureBabyCharts() {
                 interaction: { intersect: false, mode: "index" },
                 scales: {
                     x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
-                    y: { beginAtZero: true, position: "left", title: { display: true, text: "ml", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    y: { beginAtZero: true, position: "left", title: { display: true, text: "次", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
                     y1: { beginAtZero: true, position: "right", title: { display: true, text: "h", color: chartTick }, grid: { display: false }, ticks: { color: "#8b5cf6", font: axisFont } },
                 },
                 plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
@@ -886,8 +886,8 @@ function renderBabyKpis(s) {
     const temp = num(s.temperature && s.temperature.value);
     const sleepActive = !!s.sleep_active;
 
-    const feedingSub = s.feeding_count > 0
-        ? `<span class="arrow">●</span> ${s.feeding_count} 次`
+    const feedingSub = s.feeding_ml > 0
+        ? `<span class="arrow">●</span> ${fmt(s.feeding_ml, 0)} ml`
         : "";
     const sleepSub = sleepActive
         ? `<span class="arrow">◷</span> 睡眠中…`
@@ -896,7 +896,7 @@ function renderBabyKpis(s) {
         : "";
 
     grid.innerHTML =
-        buildKpi({ icon: "🍼", iconBg: "rgba(244,114,182,0.13)", iconColor: "#f472b6", label: "今日喂奶", value: fmt(s.feeding_ml, 0), unit: "ml", sub: feedingSub }) +
+        buildKpi({ icon: "🍼", iconBg: "rgba(244,114,182,0.13)", iconColor: "#f472b6", label: "今日喂奶", value: fmt(s.feeding_count, 0), unit: "次", sub: feedingSub }) +
         buildKpi({ icon: "😴", iconBg: "rgba(139,92,246,0.13)", iconColor: "#8b5cf6", label: "今日睡眠", value: fmt(s.sleep_hours, 1), unit: "小时", sub: sleepSub, valueCls: sleepActive ? "pulse-soft" : "" }) +
         buildKpi({ icon: "🧷", iconBg: "rgba(52,211,153,0.13)", iconColor: "#34d399", label: "今日尿布", value: fmt(s.diaper_count, 0), unit: "次" }) +
         buildKpi({ icon: "📈", iconBg: "rgba(251,191,36,0.13)", iconColor: "#fbbf24", label: "最新体重", value: fmt(weight, 2), unit: "kg", sub: weight !== null ? `<span class="arrow">●</span> ${fmtBabyDate(g.kg.time)}` : "" }) +
@@ -939,8 +939,8 @@ function renderFeedSleepChart(records) {
     for (const r of records) {
         const d = fmtBabyDate(r.start_time);
         if (!feed.has(d)) continue;
-        if (r.record_type === "feeding" && r.amount !== null && r.amount_unit === "ml") {
-            feed.set(d, feed.get(d) + Number(r.amount));
+        if (r.record_type === "feeding") {
+            feed.set(d, feed.get(d) + 1);
         }
         if (r.record_type === "sleep" && r.end_time) {
             const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
@@ -953,7 +953,7 @@ function renderFeedSleepChart(records) {
     feedSleepChart.update("none");
     const feedTotal = days.reduce((a, d) => a + feed.get(d), 0);
     const sleepTotal = days.reduce((a, d) => a + sleep.get(d), 0);
-    setText("feedSleepHint", `7 天喂奶 ${fmt(feedTotal, 0)} ml · 睡眠 ${fmt(sleepTotal, 1)} 小时`);
+    setText("feedSleepHint", `7 天喂奶 ${fmt(feedTotal, 0)} 次 · 睡眠 ${fmt(sleepTotal, 1)} 小时`);
 }
 
 // ── Baby entry form ───────────────────────────────────────────
@@ -973,7 +973,7 @@ function renderBabyForm() {
             <div class="baby-field-row">
                 <label>类型</label>
                 <select id="bf-category"><option value="母乳">母乳</option><option value="奶粉">奶粉</option><option value="辅食">辅食</option></select>
-                <label>奶量 (ml)</label><input type="number" id="bf-amount" placeholder="如 120" min="1" step="1">
+                <label>奶量 (ml)</label><input type="number" id="bf-amount" placeholder="母乳亲喂可不填" min="1" step="1">
                 <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
             </div>${timeFields}`,
         sleep: `
@@ -1109,10 +1109,6 @@ function submitBabyRecord() {
         body.value_unit = cat === "体重" ? "kg" : "cm";
     }
     if (babyType === "temperature") body.value_unit = "℃";
-    if (babyType === "feeding" && body.amount === null) {
-        toastMsg("请输入奶量 (ml)", true);
-        return;
-    }
     if (babyType === "growth" && body.value === null) {
         toastMsg("请输入数值", true);
         return;
@@ -1186,7 +1182,7 @@ function babyItemHtml(r) {
     let main = "";
     switch (r.record_type) {
         case "feeding":
-            main = `${r.category ? `<b>${escapeHtml(r.category)}</b> ` : ""}<b>${r.amount !== null ? fmt(r.amount, 0) + " ml" : "—"}</b>`;
+            main = `${r.category ? `<b>${escapeHtml(r.category)}</b> ` : ""}${r.amount !== null ? `<b>${fmt(r.amount, 0)} ml</b>` : ""}`;
             break;
         case "sleep":
             if (r.end_time) {
