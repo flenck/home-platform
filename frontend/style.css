@@ -302,6 +302,7 @@ body {
 .chart-head .panel-label { margin-bottom: 0; }
 .chart-hint { font-size: 12px; color: var(--text-faint); font-family: var(--font-num); }
 .chart-body { position: relative; height: 300px; margin-top: 8px; }
+.feedtime-body { height: 260px; }
 
 .double-chart { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .double-chart .chart-card { margin-bottom: 0; }

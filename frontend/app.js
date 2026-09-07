@@ -784,7 +784,8 @@ async function renderOverviewHot() {
 
 // ── Baby module ────────────────────────────────────────────────
 let growthChart = null;
-let feedSleepChart = null;
+let sleepChart = null;
+let feedTimeChart = null;
 let babySummary = null;
 let babyRecords = [];
 let babyRecordsAll = [];
@@ -825,15 +826,14 @@ function ensureBabyCharts() {
             },
         });
     }
-    const fc = document.getElementById("feedSleepChart");
-    if (fc && !feedSleepChart) {
-        feedSleepChart = new Chart(fc.getContext("2d"), {
+    const sc = document.getElementById("sleepChart");
+    if (sc && !sleepChart) {
+        sleepChart = new Chart(sc.getContext("2d"), {
             type: "bar",
             data: {
                 labels: [],
                 datasets: [
-                    { label: "喂奶 (次)", data: [], type: "bar", backgroundColor: "rgba(244,114,182,0.45)", borderColor: "#f472b6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22, yAxisID: "y" },
-                    { label: "睡眠 (h)", data: [], type: "line", borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: "#8b5cf6", borderWidth: 2, yAxisID: "y1" },
+                    { label: "睡眠 (h)", data: [], backgroundColor: "rgba(139,92,246,0.45)", borderColor: "#8b5cf6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22 },
                 ],
             },
             options: {
@@ -841,10 +841,31 @@ function ensureBabyCharts() {
                 interaction: { intersect: false, mode: "index" },
                 scales: {
                     x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
-                    y: { beginAtZero: true, position: "left", title: { display: true, text: "次", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
-                    y1: { beginAtZero: true, position: "right", title: { display: true, text: "h", color: chartTick }, grid: { display: false }, ticks: { color: "#8b5cf6", font: axisFont } },
+                    y: { beginAtZero: true, position: "left", title: { display: true, text: "小时", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
                 },
                 plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
+            },
+        });
+    }
+    const ftc = document.getElementById("feedTimeChart");
+    if (ftc && !feedTimeChart) {
+        feedTimeChart = new Chart(ftc.getContext("2d"), {
+            type: "scatter",
+            data: {
+                datasets: [
+                    { label: "母乳", data: [], backgroundColor: "#f472b6", pointRadius: 6, pointHoverRadius: 8 },
+                    { label: "奶粉", data: [], backgroundColor: "#38bdf8", pointRadius: 6, pointHoverRadius: 8 },
+                    { label: "辅食", data: [], backgroundColor: "#fbbf24", pointRadius: 6, pointHoverRadius: 8 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: "nearest" },
+                scales: {
+                    x: { type: "category", title: { display: true, text: "日期", color: chartTick }, grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
+                    y: { beginAtZero: true, max: 24, position: "left", title: { display: true, text: "时刻 (点)", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, stepSize: 2, callback: function (v) { return v; } } },
+                },
+                plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(244,114,182,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true, callbacks: { title: function (items) { return items[0] && items[0].raw && items[0].raw.x ? String(items[0].raw.x) : ""; }, label: function (ctx) { const d = ctx.raw || {}; const hh = Math.floor(d.y), mm = Math.round((d.y - hh) * 60); const t = String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); const amt = d.amount !== null ? " · " + d.amount + " ml" : ""; return ctx.dataset.label + " " + t + amt; } } } },
             },
         });
     }
@@ -869,7 +890,8 @@ async function fetchBabyData() {
         babyRecordsAll = records.data || [];
         renderBabyKpis(babySummary);
         renderGrowthChart(growth);
-        renderFeedSleepChart(babyRecordsAll);
+        renderSleepChart(babyRecordsAll);
+        renderFeedTimeChart(babyRecordsAll);
         renderBabyList();
         // 注意：不在此处重建表单，避免每 5 秒刷新重置用户正在填写/选择的内容
     } catch (err) {
@@ -886,9 +908,15 @@ function renderBabyKpis(s) {
     const temp = num(s.temperature && s.temperature.value);
     const sleepActive = !!s.sleep_active;
 
-    const feedingSub = s.feeding_ml > 0
-        ? `<span class="arrow">●</span> ${fmt(s.feeding_ml, 0)} ml`
-        : "";
+    const lastFeed = babyRecordsAll.filter(r => r.record_type === "feeding")[0];
+    let feedingSub = "";
+    if (lastFeed) {
+        const ld = new Date(lastFeed.start_time);
+        const lhh = String(ld.getHours()).padStart(2, "0") + ":" + String(ld.getMinutes()).padStart(2, "0");
+        feedingSub = `<span class="arrow">●</span> 上次 ${lhh}`;
+    } else if (s.feeding_ml > 0) {
+        feedingSub = `<span class="arrow">●</span> ${fmt(s.feeding_ml, 0)} ml`;
+    }
     const sleepSub = sleepActive
         ? `<span class="arrow">◷</span> 睡眠中…`
         : s.sleep_hours > 0
@@ -926,34 +954,67 @@ function renderGrowthChart(growth) {
     setText("growthHint", `${growth.length} 条记录 · 最新 ${last.unit === "kg" ? "体重" : "身高"} ${fmt(last.value, last.unit === "kg" ? 2 : 1)} ${last.unit}`);
 }
 
-function renderFeedSleepChart(records) {
-    if (!feedSleepChart) return;
+function renderSleepChart(records) {
+    if (!sleepChart) return;
     const days = [];
     for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         days.push(d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
     }
-    const feed = new Map(days.map(d => [d, 0]));
     const sleep = new Map(days.map(d => [d, 0]));
     for (const r of records) {
+        if (r.record_type !== "sleep" || !r.end_time) continue;
         const d = fmtBabyDate(r.start_time);
-        if (!feed.has(d)) continue;
-        if (r.record_type === "feeding") {
-            feed.set(d, feed.get(d) + 1);
-        }
-        if (r.record_type === "sleep" && r.end_time) {
-            const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
-            if (h > 0 && h < 24) sleep.set(d, sleep.get(d) + h);
-        }
+        if (!sleep.has(d)) continue;
+        const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
+        if (h > 0 && h < 24) sleep.set(d, sleep.get(d) + h);
     }
-    feedSleepChart.data.labels = days;
-    feedSleepChart.data.datasets[0].data = days.map(d => feed.get(d));
-    feedSleepChart.data.datasets[1].data = days.map(d => Math.round(sleep.get(d) * 10) / 10);
-    feedSleepChart.update("none");
-    const feedTotal = days.reduce((a, d) => a + feed.get(d), 0);
+    sleepChart.data.labels = days;
+    sleepChart.data.datasets[0].data = days.map(d => Math.round(sleep.get(d) * 10) / 10);
+    sleepChart.update("none");
     const sleepTotal = days.reduce((a, d) => a + sleep.get(d), 0);
-    setText("feedSleepHint", `7 天喂奶 ${fmt(feedTotal, 0)} 次 · 睡眠 ${fmt(sleepTotal, 1)} 小时`);
+    setText("sleepHint", `7 天共睡 ${fmt(sleepTotal, 1)} 小时`);
+}
+
+function renderFeedTimeChart(records) {
+    if (!feedTimeChart) return;
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+    }
+    const byCat = { 母乳: [], 奶粉: [], 辅食: [] };
+    const feeds = records.filter(r => r.record_type === "feeding");
+    for (const r of feeds) {
+        const d = new Date(r.start_time);
+        if (isNaN(d)) continue;
+        const key = d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+        if (!days.includes(key)) continue;
+        const hour = d.getHours() + d.getMinutes() / 60;
+        const cat = r.category && byCat[r.category] ? r.category : "辅食";
+        byCat[cat].push({ x: key, y: Math.round(hour * 60) / 60, amount: r.amount, note: r.note });
+    }
+    feedTimeChart.data.labels = days;
+    const cats = ["母乳", "奶粉", "辅食"];
+    for (let i = 0; i < cats.length; i++) {
+        const ds = feedTimeChart.data.datasets[i];
+        if (ds) ds.data = byCat[cats[i]];
+    }
+    feedTimeChart.update("none");
+
+    // hint：上次喂奶时间 + 距现在间隔（records 新→旧，取第一条即最近）
+    const last = feeds.length ? feeds[0] : null;
+    if (last) {
+        const d = new Date(last.start_time);
+        const hh = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        const ago = (Date.now() - d.getTime()) / 3600000;
+        const agoTxt = ago < 1 ? `${Math.round(ago * 60)} 分钟前` : ago < 24 ? `${fmt(ago, 1)} 小时前` : `${fmt(ago / 24, 1)} 天前`;
+        setText("feedTimeHint", `近 14 天喂奶 ${feeds.length} 次 · 上次 ${hh}（${agoTxt}）`);
+    } else {
+        setText("feedTimeHint", "暂无喂奶记录，添加第一条后这里会显示每天几点喂奶");
+    }
 }
 
 // ── Baby entry form ───────────────────────────────────────────
@@ -1187,7 +1248,9 @@ function babyItemHtml(r) {
         case "sleep":
             if (r.end_time) {
                 const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
-                main = `睡了 <b>${fmt(h, 1)} 小时</b> <span class="baby-dim">${fmtTime(r.end_time)} 醒</span>`;
+                main = h > 0 && h < 24
+                    ? `睡了 <b>${fmt(h, 1)} 小时</b> <span class="baby-dim">${fmtTime(r.end_time)} 醒</span>`
+                    : `睡眠记录 <span class="baby-dim">${fmtTime(r.end_time)}</span>`;
             } else {
                 main = `<b class="sleeping">睡眠中…</b>`;
             }

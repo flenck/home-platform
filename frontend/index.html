@@ -326,11 +326,19 @@
                     </div>
                     <div class="glass chart-card">
                         <div class="chart-head">
-                            <span class="panel-label"><span class="dot cyan"></span> 近 7 天 · 喂奶 & 睡眠</span>
-                            <span class="chart-hint" id="feedSleepHint"></span>
+                            <span class="panel-label"><span class="dot cyan"></span> 近 7 天 · 睡眠时长</span>
+                            <span class="chart-hint" id="sleepHint"></span>
                         </div>
-                        <div class="chart-body"><canvas id="feedSleepChart"></canvas></div>
+                        <div class="chart-body"><canvas id="sleepChart"></canvas></div>
                     </div>
+                </div>
+
+                <div class="glass chart-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot pink"></span> 🍼 喂奶时间趋势</span>
+                        <span class="chart-hint" id="feedTimeHint"></span>
+                    </div>
+                    <div class="chart-body feedtime-body"><canvas id="feedTimeChart"></canvas></div>
                 </div>
 
                 <div class="glass chart-card">
