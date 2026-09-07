@@ -381,6 +381,12 @@
 
                 <div class="glass panel-pad finance-entry-card">
                     <div class="panel-label"><span class="dot amber"></span> 快速记账</div>
+                    <div class="finance-receipt-row">
+                        <button class="fin-btn ghost" id="finReceiptBtn">📷 识别小票</button>
+                        <span class="fin-receipt-tip">拍照或上传小票，自动识别金额 / 日期 / 分类</span>
+                        <input type="file" id="finReceiptFile" accept="image/*" style="display:none;">
+                    </div>
+                    <div class="fin-receipt-result" id="finReceiptResult" style="display:none;"></div>
                     <div class="finance-form" id="financeForm">
                         <div class="finance-tabs" id="financeTabs">
                             <button class="finance-tab active" data-ftype="expense">💸 支出</button>

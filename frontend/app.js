@@ -1733,6 +1733,98 @@ function esc(s) {
         document.getElementById("finBudgetAmount").value = "";
         fetchFinanceData();
     });
+
+    // ── 小票识别 ──
+    const receiptBtn = document.getElementById("finReceiptBtn");
+    const receiptFile = document.getElementById("finReceiptFile");
+    const receiptResult = document.getElementById("finReceiptResult");
+    if (receiptBtn && receiptFile) {
+        receiptBtn.addEventListener("click", () => receiptFile.click());
+        receiptFile.addEventListener("change", async () => {
+            const file = receiptFile.files[0];
+            if (!file) return;
+            if (file.size > 15 * 1024 * 1024) { alert("图片过大（最大 15MB）"); return; }
+            if (receiptResult) {
+                receiptResult.style.display = "";
+                receiptResult.innerHTML = '<div class="fin-ocr-loading">⏳ 正在识别小票…（约 3-8 秒）</div>';
+            }
+            const b64 = await new Promise(resolve => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result).split(",")[1] || "");
+                reader.readAsDataURL(file);
+            });
+            try {
+                const res = await fetch(`${API_BASE}/api/v1/finance/receipt`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: b64 }),
+                });
+                const data = await res.json();
+                if (!res.ok || !data.ok) {
+                    receiptResult.innerHTML = `<div class="fin-ocr-err">识别失败：${esc(data.error || data.detail || "未知错误")}</div>`;
+                    return;
+                }
+                renderReceiptResult(data, file);
+            } catch (e) {
+                receiptResult.innerHTML = `<div class="fin-ocr-err">网络错误：${esc(e.message)}</div>`;
+            }
+        });
+    }
+
+    function renderReceiptResult(data, file) {
+        if (!receiptResult) return;
+        const previewUrl = URL.createObjectURL(file);
+        const amountTxt = data.amount != null ? fmtMoney(data.amount) : "未识别出";
+        const dateTxt = data.date || "未识别出";
+        const catTxt = data.category || "未识别出";
+        const merchant = data.merchant ? ` · ${esc(data.merchant)}` : "";
+        receiptResult.innerHTML = `
+        <div class="fin-ocr-card">
+            <img class="fin-ocr-preview" src="${previewUrl}" alt="小票预览">
+            <div class="fin-ocr-fields">
+                <div class="fin-ocr-title">识别结果${merchant}</div>
+                <div class="fin-ocr-grid">
+                    <div class="fin-ocr-item"><span class="fin-ocr-label">金额</span><span class="fin-ocr-val money-out">${amountTxt}</span></div>
+                    <div class="fin-ocr-item"><span class="fin-ocr-label">日期</span><span class="fin-ocr-val">${dateTxt}</span></div>
+                    <div class="fin-ocr-item"><span class="fin-ocr-label">分类</span><span class="fin-ocr-val">${catTxt}</span></div>
+                </div>
+                <div class="fin-ocr-actions">
+                    <button class="fin-btn small" id="finOcrFill">回填表单</button>
+                    <button class="fin-btn small ghost" id="finOcrSave">识别并直接保存</button>
+                </div>
+                <div class="fin-ocr-raw">${esc((data.lines || []).slice(0, 8).join(" / "))}</div>
+            </div>
+        </div>`;
+        const fillBtn = document.getElementById("finOcrFill");
+        const saveBtn = document.getElementById("finOcrSave");
+        if (fillBtn) fillBtn.addEventListener("click", () => fillFromReceipt(data));
+        if (saveBtn) saveBtn.addEventListener("click", async () => {
+            fillFromReceipt(data);
+            document.getElementById("finSaveBtn").click();
+            if (receiptResult) receiptResult.style.display = "none";
+        });
+    }
+
+    function fillFromReceipt(data) {
+        if (!data) return;
+        // 切到支出
+        const expenseTab = document.querySelector('#financeTabs .finance-tab[data-ftype="expense"]');
+        if (expenseTab) expenseTab.click();
+        if (data.amount != null) document.getElementById("finAmount").value = data.amount;
+        if (data.date) {
+            const dateInput = document.getElementById("finDate");
+            if (dateInput) dateInput.value = data.date;
+        }
+        if (data.category) {
+            const catSel = document.getElementById("finCategory");
+            for (const opt of catSel.options) {
+                if (opt.textContent.indexOf(data.category) >= 0) { catSel.value = opt.value; break; }
+            }
+        }
+        const noteInput = document.getElementById("finNote");
+        if (noteInput) noteInput.value = data.merchant || "";
+        alert("已回填表单，确认无误后点「保存记账」");
+    }
 })();
 
 // ── Init ──────────────────────────────────────────────────────

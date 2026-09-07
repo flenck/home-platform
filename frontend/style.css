@@ -748,3 +748,30 @@ select.fin-input { cursor: pointer; }
 @media (max-width: 900px) {
     .finance-top-row, .finance-mid-row { grid-template-columns: 1fr; }
 }
+
+/* ── Finance 小票识别 ───────────────────────────────────────── */
+.finance-receipt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.fin-btn.ghost {
+    background: rgba(56,189,248,0.1); color: #38bdf8;
+    border: 1px solid rgba(56,189,248,0.35);
+}
+.fin-btn.ghost:hover { background: rgba(56,189,248,0.18); opacity: 1; }
+.fin-receipt-tip { font-size: 12px; color: var(--text-faint); }
+
+.fin-receipt-result { margin-bottom: 14px; }
+.fin-ocr-loading { padding: 14px; color: #38bdf8; font-size: 13px; background: rgba(56,189,248,0.06); border-radius: 10px; }
+.fin-ocr-err { padding: 14px; color: #f87171; font-size: 13px; background: rgba(248,113,113,0.08); border-radius: 10px; }
+.fin-ocr-card {
+    display: flex; gap: 14px; padding: 12px;
+    background: var(--bg-soft); border: 1px solid rgba(56,189,248,0.25);
+    border-radius: 12px; flex-wrap: wrap; align-items: flex-start;
+}
+.fin-ocr-preview { width: 120px; max-height: 160px; object-fit: contain; border-radius: 8px; background: #0d1322; flex-shrink: 0; }
+.fin-ocr-fields { flex: 1; min-width: 220px; }
+.fin-ocr-title { font-size: 13px; font-weight: 700; color: #38bdf8; margin-bottom: 8px; }
+.fin-ocr-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.fin-ocr-item { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 7px 10px; }
+.fin-ocr-label { display: block; font-size: 11px; color: var(--text-faint); margin-bottom: 2px; }
+.fin-ocr-val { font-size: 14px; font-weight: 700; color: var(--text); }
+.fin-ocr-actions { display: flex; gap: 8px; margin-bottom: 8px; }
+.fin-ocr-raw { font-size: 11px; color: var(--text-faint); line-height: 1.5; }

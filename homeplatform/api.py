@@ -1,7 +1,10 @@
 """REST API routes for the Home Platform."""
 
+import base64
+import json
 import logging
 import os
+import urllib.request
 from datetime import datetime, timezone
 from typing import Any
 
@@ -483,6 +486,52 @@ async def finance_transaction_delete(txn_id: int) -> dict[str, Any]:
     if not await delete_finance_transaction(txn_id):
         raise HTTPException(status_code=404, detail="transaction not found")
     return {"ok": True}
+
+
+# 小票识别：转发到独立 OCR 服务（localhost:8001，RapidOCR）
+_OCR_URL = os.getenv("RECEIPT_OCR_URL", "http://127.0.0.1:8001/ocr")
+
+
+@router.post("/finance/receipt")
+async def finance_receipt_ocr(request: Request) -> dict[str, Any]:
+    """识别小票图片并返回结构化结果（金额/日期/分类/商家）。
+
+    Body (JSON): {"image": "<base64>"} 或 multipart form 字段 image（文件）。
+    """
+    ctype = request.headers.get("content-type", "")
+    img_b64 = None
+    if "multipart/form-data" in ctype:
+        form = await request.form()
+        upload = form.get("image")
+        if upload is None:
+            raise HTTPException(status_code=422, detail="image file required")
+        data = await upload.read()
+        if len(data) > 15 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="image too large (max 15MB)")
+        img_b64 = base64.b64encode(data).decode()
+    else:
+        try:
+            body = await request.json()
+        except Exception:
+            raise HTTPException(status_code=422, detail="invalid JSON body")
+        img_b64 = body.get("image")
+        if not img_b64:
+            raise HTTPException(status_code=422, detail="image (base64) required")
+
+    payload = json.dumps({"image": img_b64}).encode()
+    req = urllib.request.Request(
+        _OCR_URL,
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read().decode())
+    except Exception as e:
+        _LOGGER.warning("OCR service unavailable: %s", e)
+        raise HTTPException(status_code=503, detail="识别服务不可用，请稍后重试")
+    return result
 
 
 @router.get("/finance/budgets")
