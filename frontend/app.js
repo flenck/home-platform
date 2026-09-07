@@ -786,6 +786,7 @@ async function renderOverviewHot() {
 let growthChart = null;
 let sleepChart = null;
 let feedTimeChart = null;
+let feedCountChart = null;
 let babySummary = null;
 let babyRecords = [];
 let babyRecordsAll = [];
@@ -823,6 +824,27 @@ function ensureBabyCharts() {
                     y1: { beginAtZero: false, position: "right", title: { display: true, text: "cm", color: chartTick }, grid: { display: false }, ticks: { color: "#fbbf24", font: axisFont } },
                 },
                 plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(244,114,182,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
+            },
+        });
+    }
+    const fcc = document.getElementById("feedCountChart");
+    if (fcc && !feedCountChart) {
+        feedCountChart = new Chart(fcc.getContext("2d"), {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [
+                    { label: "喂奶次数", data: [], borderColor: "#f472b6", backgroundColor: "rgba(244,114,182,0.12)", fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#f472b6", borderWidth: 2.5 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: "index" },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
+                    y: { beginAtZero: true, min: 0, position: "left", title: { display: true, text: "次", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, stepSize: 1 } },
+                },
+                plugins: { legend: { display: false }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(244,114,182,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: false, callbacks: { label: function (ctx) { return "喂奶 " + ctx.parsed.y + " 次"; } } } },
             },
         });
     }
@@ -889,6 +911,7 @@ async function fetchBabyData() {
         const records = await recordsRes.json();
         babyRecordsAll = records.data || [];
         renderBabyKpis(babySummary);
+        renderFeedCountChart(babyRecordsAll);
         renderGrowthChart(growth);
         renderSleepChart(babyRecordsAll);
         renderFeedTimeChart(babyRecordsAll);
@@ -952,6 +975,31 @@ function renderGrowthChart(growth) {
     growthChart.update("none");
     const last = growth[growth.length - 1];
     setText("growthHint", `${growth.length} 条记录 · 最新 ${last.unit === "kg" ? "体重" : "身高"} ${fmt(last.value, last.unit === "kg" ? 2 : 1)} ${last.unit}`);
+}
+
+function renderFeedCountChart(records) {
+    if (!feedCountChart) return;
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+    }
+    const cnt = new Map(days.map(d => [d, 0]));
+    for (const r of records) {
+        if (r.record_type !== "feeding") continue;
+        const d = fmtBabyDate(r.start_time);
+        if (cnt.has(d)) cnt.set(d, cnt.get(d) + 1);
+    }
+    const data = days.map(d => cnt.get(d));
+    feedCountChart.data.labels = days;
+    feedCountChart.data.datasets[0].data = data;
+    feedCountChart.update("none");
+    const total = data.reduce((a, b) => a + b, 0);
+    const daysWith = data.filter(v => v > 0).length;
+    const max = Math.max.apply(null, data);
+    const avg = daysWith > 0 ? Math.round(total / daysWith * 10) / 10 : 0;
+    setText("feedCountHint", `近 14 天共 ${total} 次 · 平均每天 ${avg} 次 · 单日最多 ${max} 次`);
 }
 
 function renderSleepChart(records) {
