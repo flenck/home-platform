@@ -68,7 +68,7 @@ document.querySelectorAll(".nav-item[data-page]").forEach(item => {
         if (page === "energy") { ensureEnergyCharts(); fetchEnergyData(); }
         if (page === "weather") { ensureTempChart(); fetchWeatherData(); }
         if (page === "news") fetchNewsData();
-        if (page === "baby") { ensureBabyCharts(); fetchBabyData(); }
+        if (page === "baby") { ensureBabyCharts(); renderBabyForm(); fetchBabyData(); }
         if (page === "overview") renderOverviewHot();
         if (window.innerWidth <= 768) { sidebarOpen = false; updateSidebar(); }
     });
@@ -871,7 +871,7 @@ async function fetchBabyData() {
         renderGrowthChart(growth);
         renderFeedSleepChart(babyRecordsAll);
         renderBabyList();
-        renderBabyForm();
+        // 注意：不在此处重建表单，避免每 5 秒刷新重置用户正在填写/选择的内容
     } catch (err) {
         console.error("Baby fetch error:", err);
     }
@@ -1041,6 +1041,8 @@ function renderBabyForm() {
             });
             if (!res.ok) throw new Error(await res.text());
             toastMsg("😴 睡眠已开始，好好休息~");
+            if (babySummary) babySummary.sleep_active = true;
+            renderBabyForm();
             fetchBabyData();
         } catch (e) {
             console.error(e);
@@ -1058,6 +1060,8 @@ function renderBabyForm() {
             });
             if (!res.ok) throw new Error(await res.text());
             toastMsg("☀ 睡眠结束，记录完成！");
+            if (babySummary) babySummary.sleep_active = false;
+            renderBabyForm();
             fetchBabyData();
         } catch (e) {
             console.error(e);
@@ -1141,6 +1145,10 @@ function submitBabyRecord() {
         })
         .then(() => {
             toastMsg(`✓ ${BABY_TYPE_META[babyType]?.label || ""}记录已保存`);
+            if (babyType === "sleep" && babySummary) {
+                babySummary.sleep_active = !endIso;
+            }
+            renderBabyForm();
             fetchBabyData();
         })
         .catch(e => {
