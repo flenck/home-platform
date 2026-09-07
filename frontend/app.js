@@ -1049,17 +1049,18 @@ function renderSleepChart(records) {
         }
         byDay.set(idx, merged);
     }
-    // ── 渲染：左侧时间刻度 + 14 天列，睡眠条绝对定位 ──
-    const SCALE_W = 52, H_PX = 420;
+    // ── 渲染：左侧时间刻度 + 14 天列，睡眠条绝对定位；日期 x 轴在底部 ──
+    const SCALE_W = 52, H_PX = 480, TICK_STEP = 2;
     const fmtT = function (h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
-    // 时间刻度（左侧 0/6/12/18/24 点，虚线横贯）
+    // 时间刻度（左侧每 2 小时一条虚线横贯；00:00 与 24:00 标签不越界）
     let scaleHtml = "";
-    for (let h = 0; h <= 24; h += 6) {
+    for (let h = 0; h <= 24; h += TICK_STEP) {
         const top = (h / 24) * H_PX;
-        const tick = h === 24 ? "24:00" : String(h).padStart(2, "0") + ":00";
-        scaleHtml += '<div class="tl-tick" style="top:' + top + 'px"><span class="tl-tick-label">' + tick + "</span></div>";
+        const tick = String(h).padStart(2, "0") + ":00";
+        const lblTop = h === 0 ? 3 : (h === 24 ? -16 : -8);
+        scaleHtml += '<div class="tl-tick" style="top:' + top + 'px"><span class="tl-tick-label" style="top:' + lblTop + 'px">' + tick + "</span></div>";
     }
-    // 日期列 + 睡眠条
+    // 日期列（主体条 + 底部日期）：日期 x 轴在下面
     let colsHtml = "";
     for (let i = 0; i < days.length; i++) {
         const segs = byDay.get(i) || [];
@@ -1070,7 +1071,7 @@ function renderSleepChart(records) {
             barsHtml += '<div class="tl-bar" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(hgt, 6).toFixed(1) + 'px" title="' + days[i] + " " + fmtT(s.start) + " → " + fmtT(s.end) + "（" + Math.round((s.end - s.start) * 10) / 10 + " 小时）\"></div>";
         }
         const has = segs.length > 0;
-        colsHtml += '<div class="tl-col"><div class="tl-date' + (has ? " has" : "") + '">' + days[i] + "</div><div class=\"tl-body\">" + barsHtml + "</div></div>";
+        colsHtml += '<div class="tl-col"><div class="tl-body">' + barsHtml + '</div><div class="tl-date' + (has ? " has" : "") + '">' + days[i] + "</div></div>";
     }
     host.innerHTML =
         '<div class="sleep-timeline">' +
@@ -1079,7 +1080,7 @@ function renderSleepChart(records) {
         "</div>" +
         '<div class="tl-axis">' +
         '<div style="width:' + SCALE_W + 'px"></div>' +
-        '<div class="tl-cols"><div class="tl-axis-note">纵轴为 24 小时时刻（00:00–24:00）· 竖条 = 当天入睡→醒来</div></div>' +
+        '<div class="tl-cols"><div class="tl-axis-note">纵轴为 24 小时时刻（每 2 小时一格）· 竖条 = 当天入睡→醒来 · 悬停看详情</div></div>' +
         "</div>";
     const hint = document.getElementById("sleepHint");
     if (hint) hint.textContent = "近 14 天共 " + segCount + " 段睡眠 · 纵向条为入睡→醒来时间";
