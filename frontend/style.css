@@ -284,6 +284,22 @@ body {
 .gauge-value { font-family: var(--font-num); font-size: 26px; font-weight: 800; fill: var(--text); }
 .gauge-unit { font-family: var(--font-num); font-size: 12px; fill: var(--text-faint); }
 
+/* ── 睡眠时间线（纯 DOM 甘特图）─────────────────────────── */
+.sleep-body { height: auto; }
+.sleep-chart-host { width: 100%; max-width: 100%; overflow-x: auto; }
+.sleep-timeline { display: flex; gap: 0; min-width: 0; }
+.tl-scale { position: relative; flex: 0 0 auto; border-right: 1px solid var(--border); }
+.tl-tick { position: absolute; left: 0; right: 0; border-top: 1px dashed rgba(255,255,255,0.08); }
+.tl-tick-label { position: absolute; top: -8px; left: 6px; font-size: 10.5px; color: var(--text-faint); font-family: var(--font-num); }
+.tl-cols { display: flex; flex: 1; min-width: 0; }
+.tl-col { flex: 1 1 0; min-width: 0; position: relative; border-left: 1px solid rgba(255,255,255,0.05); }
+.tl-date { text-align: center; font-size: 11px; color: var(--text-faint); padding: 5px 0 4px; white-space: nowrap; }
+.tl-date.has { color: #8b5cf6; font-weight: 600; }
+.tl-body { position: relative; height: 420px; }
+.tl-bar { position: absolute; left: 18%; right: 18%; min-height: 6px; background: linear-gradient(180deg, rgba(139,92,246,0.85), rgba(139,92,246,0.55)); border: 1px solid rgba(139,92,246,0.9); border-radius: 5px; cursor: pointer; transition: filter 0.15s; }
+.tl-bar:hover { filter: brightness(1.3); }
+.tl-axis { display: flex; margin-top: 6px; }
+.tl-axis-note { font-size: 11px; color: var(--text-faint); padding-left: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* ── Insight panel & mini stats ─────────────────────────────── */
 .insight-panel { display: flex; flex-direction: column; }
 .insight-panel.wide { margin-bottom: 16px; }

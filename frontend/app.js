@@ -865,51 +865,8 @@ function ensureBabyCharts() {
     }
     const sc = document.getElementById("sleepChart");
     if (sc && !sleepChart) {
-        sleepChart = new Chart(sc.getContext("2d"), {
-            type: "bar",
-            data: {
-                labels: [],
-                datasets: [
-                    {
-                        label: "睡眠", data: [], stack: "sleep",
-                        backgroundColor: "rgba(139,92,246,0.55)", borderColor: "#8b5cf6",
-                        borderWidth: 1, borderRadius: 6,
-                        barPercentage: 0.62, categoryPercentage: 0.85,
-                    },
-                ],
-            },
-            options: {
-                responsive: true, maintainAspectRatio: false,
-                interaction: { intersect: false, mode: "index" },
-                indexAxis: "y",
-                scales: {
-                    x: {
-                        type: "linear", min: 0, max: 24, stacked: true,
-                        title: { display: true, text: "时刻（点）", color: chartTick },
-                        grid: { color: chartGrid },
-                        ticks: { color: chartTick, font: axisFont, stepSize: 3, callback: function (v) { return String(v).padStart(2, "0") + ":00"; } },
-                    },
-                    y: { grid: { display: false }, ticks: { color: chartTick, font: axisFont } },
-                },
-                plugins: {
-                    legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } },
-                    tooltip: {
-                        backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1,
-                        titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: false,
-                        callbacks: {
-                            title: function (items) { return items[0] ? items[0].label : ""; },
-                            label: function (ctx) {
-                                const raw = ctx.raw;
-                                if (!raw || !Array.isArray(raw.x)) return "";
-                                const f = function (h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
-                                const dur = Math.round((raw.x[1] - raw.x[0]) * 10) / 10;
-                                return "睡眠 " + f(raw.x[0]) + " → " + f(raw.x[1]) + "（" + dur + " 小时）";
-                            },
-                        },
-                    },
-                },
-            },
-        });
+        // 睡眠时间线改为纯 DOM/CSS 渲染（Chart.js 浮条会被自动重排，不可靠）
+        sleepChart = { dom: sc };
     }
     const ftc = document.getElementById("feedTimeChart");
     if (ftc && !feedTimeChart) {
@@ -1045,18 +1002,19 @@ function renderFeedCountChart(records) {
 }
 
 function renderSleepChart(records) {
-    if (!sleepChart) return;
-    // 近 14 天（含今天），按日期倒序（最新在顶部）
+    const host = document.getElementById("sleepChart");
+    if (!host) return;
+    // 近 14 天（含今天），最新日期在最右
     const days = []; const dayIdx = new Map();
-    for (let i = 13; i >= 0; i--) {
+    for (let i = 0; i < 14; i++) {
         const d = new Date();
-        d.setDate(d.getDate() - i);
+        d.setDate(d.getDate() - (13 - i));
         const key = fmtBabyDate(d);
         days.push(key);
         dayIdx.set(key, i);
     }
-    // 每条睡眠记录 → 浮条 [startHour, endHour]，跨天记录自动拆分
-    const byDay = new Map(); // idx -> [{start, end}]
+    // 收集睡眠段：每条记录 → 按天拆分 [startH, endH]（跨天自动拆）
+    const byDay = new Map(); // idx -> [{start,end}]
     let segCount = 0;
     for (const r of records) {
         if (r.record_type !== "sleep" || !r.end_time) continue;
@@ -1078,10 +1036,9 @@ function renderSleepChart(records) {
             st = segEnd;
         }
     }
-    // 组装数据（同一天多段合并相邻段后全部平铺，stacked 浮条同排堆叠）
-    const flat = [];
-    for (let i = 0; i < days.length; i++) {
-        const list = (byDay.get(i) || []).sort((a, b) => a.start - b.start);
+    // 合并同一天相邻段
+    for (const idx of byDay.keys()) {
+        const list = byDay.get(idx).sort((a, b) => a.start - b.start);
         const merged = [];
         for (const s of list) {
             if (merged.length && s.start <= merged[merged.length - 1].end + 0.05) {
@@ -1090,12 +1047,42 @@ function renderSleepChart(records) {
                 merged.push({ start: s.start, end: s.end });
             }
         }
-        for (const m of merged) flat.push({ y: i, x: [m.start, m.end] });
+        byDay.set(idx, merged);
     }
-    sleepChart.data.labels = days;
-    sleepChart.data.datasets[0].data = flat;
-    sleepChart.update("none");
-    setText("sleepHint", `近 14 天共 ${segCount} 段睡眠 · 横向条为入睡→醒来时间`);
+    // ── 渲染：左侧时间刻度 + 14 天列，睡眠条绝对定位 ──
+    const SCALE_W = 52, H_PX = 420;
+    const fmtT = function (h) { const hh = Math.floor(h), mm = Math.round((h - hh) * 60); return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0"); };
+    // 时间刻度（左侧 0/6/12/18/24 点，虚线横贯）
+    let scaleHtml = "";
+    for (let h = 0; h <= 24; h += 6) {
+        const top = (h / 24) * H_PX;
+        const tick = h === 24 ? "24:00" : String(h).padStart(2, "0") + ":00";
+        scaleHtml += '<div class="tl-tick" style="top:' + top + 'px"><span class="tl-tick-label">' + tick + "</span></div>";
+    }
+    // 日期列 + 睡眠条
+    let colsHtml = "";
+    for (let i = 0; i < days.length; i++) {
+        const segs = byDay.get(i) || [];
+        let barsHtml = "";
+        for (const s of segs) {
+            const top = (s.start / 24) * H_PX;
+            const hgt = ((s.end - s.start) / 24) * H_PX;
+            barsHtml += '<div class="tl-bar" style="top:' + top.toFixed(1) + 'px;height:' + Math.max(hgt, 6).toFixed(1) + 'px" title="' + days[i] + " " + fmtT(s.start) + " → " + fmtT(s.end) + "（" + Math.round((s.end - s.start) * 10) / 10 + " 小时）\"></div>";
+        }
+        const has = segs.length > 0;
+        colsHtml += '<div class="tl-col"><div class="tl-date' + (has ? " has" : "") + '">' + days[i] + "</div><div class=\"tl-body\">" + barsHtml + "</div></div>";
+    }
+    host.innerHTML =
+        '<div class="sleep-timeline">' +
+        '<div class="tl-scale" style="width:' + SCALE_W + 'px;height:' + H_PX + 'px">' + scaleHtml + "</div>" +
+        '<div class="tl-cols" style="height:' + H_PX + 'px">' + colsHtml + "</div>" +
+        "</div>" +
+        '<div class="tl-axis">' +
+        '<div style="width:' + SCALE_W + 'px"></div>' +
+        '<div class="tl-cols"><div class="tl-axis-note">纵轴为 24 小时时刻（00:00–24:00）· 竖条 = 当天入睡→醒来</div></div>' +
+        "</div>";
+    const hint = document.getElementById("sleepHint");
+    if (hint) hint.textContent = "近 14 天共 " + segCount + " 段睡眠 · 纵向条为入睡→醒来时间";
 }
 
 function renderFeedTimeChart(records) {
