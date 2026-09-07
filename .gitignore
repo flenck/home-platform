@@ -69,3 +69,6 @@ scripts/yolo_train/runs/
 *.cache
 scripts/yolo_train/images/train/*_a*.jpg
 scripts/yolo_train/images/val/*_a*.jpg
+scripts/captcha_watch.py
+scripts/sgcc_auto_login.py
+scripts/sgcc_fetch_daily.py

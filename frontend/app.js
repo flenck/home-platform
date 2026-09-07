@@ -468,6 +468,21 @@ function renderEnergyPage() {
     const yUsage = num(e.yearly_usage && e.yearly_usage.value);
     const yCharge = num(e.yearly_charge && e.yearly_charge.value);
 
+    // 采集/登录状态提示（95598 自动登录失败时提醒手动登录）
+    const st = e.sgcc_status || {};
+    const alertEl = document.getElementById("energy-alert");
+    if (alertEl) {
+        let msg = "";
+        if (st.login_failed === true || st.fetch_failed === true) {
+            const t = st.updated_at ? st.updated_at.slice(5, 16).replace("-", "/") : "最近";
+            msg = `⚠️ <b>电费自动获取失败</b>（${t}）：服务器自动登录未通过验证码。请在服务器的 VNC 浏览器中手动登录 95598，系统会自动学习并恢复每日采集。`;
+        } else if (st.last_fetch_at && !st.fetch_ok) {
+            msg = `ℹ️ 最近一次成功采集：${st.last_fetch_at.slice(5, 16).replace("-", "/")}，数据可能较旧。`;
+        }
+        alertEl.innerHTML = msg;
+        alertEl.style.display = msg ? "block" : "none";
+    }
+
     const grid = document.getElementById("energy-kpis");
     if (grid) {
         const days = energyProjection();
