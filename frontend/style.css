@@ -285,7 +285,6 @@ body {
 .gauge-unit { font-family: var(--font-num); font-size: 12px; fill: var(--text-faint); }
 
 /* ── 睡眠时间线（纯 DOM 甘特图）─────────────────────────── */
-.sleep-body { height: auto; }
 .sleep-chart-host { width: 100%; max-width: 100%; overflow-x: auto; }
 .sleep-timeline { display: flex; gap: 0; min-width: 0; }
 .tl-scale { position: relative; flex: 0 0 auto; border-right: 1px solid var(--border); }
@@ -293,7 +292,7 @@ body {
 .tl-tick-label { position: absolute; top: -8px; left: 6px; font-size: 10.5px; color: var(--text-faint); font-family: var(--font-num); }
 .tl-cols { display: flex; flex: 1; min-width: 0; }
 .tl-col { flex: 1 1 0; min-width: 0; position: relative; border-left: 1px solid rgba(255,255,255,0.05); }
-.tl-date { text-align: center; font-size: 10.5px; color: var(--text-faint); padding: 6px 0 2px; white-space: nowrap; }
+.tl-date { text-align: center; font-size: 11px; color: #aab2c5; padding: 7px 0 3px; white-space: nowrap; border-top: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.03); }
 .tl-date.has { color: #8b5cf6; font-weight: 600; }
 .tl-body { position: relative; height: 480px; border-bottom: 1px solid var(--border); }
 .tl-bar { position: absolute; left: 18%; right: 18%; min-height: 6px; background: linear-gradient(180deg, rgba(139,92,246,0.85), rgba(139,92,246,0.55)); border: 1px solid rgba(139,92,246,0.9); border-radius: 5px; cursor: pointer; transition: filter 0.15s; }
@@ -328,6 +327,7 @@ body {
 .chart-head .panel-label { margin-bottom: 0; }
 .chart-hint { font-size: 12px; color: var(--text-faint); font-family: var(--font-num); }
 .chart-body { position: relative; height: 300px; margin-top: 8px; }
+.chart-body.sleep-body { height: auto; }
 .feedtime-body { height: 260px; }
 
 .double-chart { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
