@@ -330,7 +330,7 @@ body {
 .chart-body.sleep-body { height: auto; }
 .feedtime-body { height: 260px; }
 
-.double-chart { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.double-chart { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 .double-chart .chart-card { margin-bottom: 0; }
 
 /* ── Weather ────────────────────────────────────────────────── */
