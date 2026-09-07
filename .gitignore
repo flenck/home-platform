@@ -64,3 +64,8 @@ yolov8n.pt
 # ── 根目录界面截图 ────────────────────────────────────────
 /*.png
 /*.jpg
+scripts/yolo_aug/
+scripts/yolo_train/runs/
+*.cache
+scripts/yolo_train/images/train/*_a*.jpg
+scripts/yolo_train/images/val/*_a*.jpg
