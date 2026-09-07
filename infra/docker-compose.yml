@@ -53,6 +53,7 @@ services:
     volumes:
       - ../frontend:/app/frontend:ro
       - ../config:/app/config:ro
+      - ../homeplatform:/app/homeplatform:ro
 
   # ── 国家电网电费数据采集 (本地验证码识别，无需 API Key) ─────────
   sgcc_electricity:

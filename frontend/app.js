@@ -48,6 +48,7 @@ const pageTitles = {
     weather: ["天气", "室外环境 · 舒适度评估"],
     energy: ["能耗", "电力消耗 · 费用洞察"],
     news: ["新闻", "AI / 科技热点 · GitHub 新奇项目"],
+    baby: ["宝宝", "喂养 · 睡眠 · 成长记录"],
     config: ["配置", "系统参数"],
 };
 
@@ -67,6 +68,7 @@ document.querySelectorAll(".nav-item[data-page]").forEach(item => {
         if (page === "energy") { ensureEnergyCharts(); fetchEnergyData(); }
         if (page === "weather") { ensureTempChart(); fetchWeatherData(); }
         if (page === "news") fetchNewsData();
+        if (page === "baby") { ensureBabyCharts(); fetchBabyData(); }
         if (page === "overview") renderOverviewHot();
         if (window.innerWidth <= 768) { sidebarOpen = false; updateSidebar(); }
     });
@@ -636,6 +638,7 @@ async function fetchData() {
         }
         if (currentPage === "energy") { ensureEnergyCharts(); fetchEnergyData(); }
         if (currentPage === "weather") fetchWeatherData();
+        if (currentPage === "baby") fetchBabyData();
 
         // config page
         const cfgComponents = document.getElementById("cfg-components");
@@ -779,12 +782,503 @@ async function renderOverviewHot() {
     }));
 })();
 
+// ── Baby module ────────────────────────────────────────────────
+let growthChart = null;
+let feedSleepChart = null;
+let babySummary = null;
+let babyRecords = [];
+let babyRecordsAll = [];
+let babyFilter = "";
+let babyType = "feeding";
+
+const BABY_TYPE_META = {
+    feeding: { label: "喂奶", icon: "🍼", color: "#f472b6" },
+    sleep: { label: "睡眠", icon: "😴", color: "#8b5cf6" },
+    diaper: { label: "尿布", icon: "🧷", color: "#34d399" },
+    growth: { label: "成长", icon: "📈", color: "#fbbf24" },
+    temperature: { label: "体温", icon: "🌡", color: "#f87171" },
+    vaccination: { label: "疫苗", icon: "💉", color: "#3b82f6" },
+    note: { label: "备注", icon: "📝", color: "#22d3ee" },
+};
+
+function ensureBabyCharts() {
+    const gc = document.getElementById("growthChart");
+    if (gc && !growthChart) {
+        growthChart = new Chart(gc.getContext("2d"), {
+            type: "line",
+            data: {
+                labels: [],
+                datasets: [
+                    { label: "体重 (kg)", data: [], borderColor: "#f472b6", backgroundColor: "rgba(244,114,182,0.10)", fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#f472b6", borderWidth: 2.5, yAxisID: "y" },
+                    { label: "身高 (cm)", data: [], borderColor: "#fbbf24", backgroundColor: "rgba(251,191,36,0.08)", fill: true, tension: 0.35, pointRadius: 4, pointBackgroundColor: "#fbbf24", borderWidth: 2.5, yAxisID: "y1" },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: "index" },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
+                    y: { beginAtZero: false, position: "left", title: { display: true, text: "kg", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    y1: { beginAtZero: false, position: "right", title: { display: true, text: "cm", color: chartTick }, grid: { display: false }, ticks: { color: "#fbbf24", font: axisFont } },
+                },
+                plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(244,114,182,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
+            },
+        });
+    }
+    const fc = document.getElementById("feedSleepChart");
+    if (fc && !feedSleepChart) {
+        feedSleepChart = new Chart(fc.getContext("2d"), {
+            type: "bar",
+            data: {
+                labels: [],
+                datasets: [
+                    { label: "喂奶 (ml)", data: [], type: "bar", backgroundColor: "rgba(244,114,182,0.45)", borderColor: "#f472b6", borderWidth: 1, borderRadius: 5, maxBarThickness: 22, yAxisID: "y" },
+                    { label: "睡眠 (h)", data: [], type: "line", borderColor: "#8b5cf6", backgroundColor: "rgba(139,92,246,0.10)", fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: "#8b5cf6", borderWidth: 2, yAxisID: "y1" },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                interaction: { intersect: false, mode: "index" },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: chartTick, maxRotation: 45, font: axisFont } },
+                    y: { beginAtZero: true, position: "left", title: { display: true, text: "ml", color: chartTick }, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    y1: { beginAtZero: true, position: "right", title: { display: true, text: "h", color: chartTick }, grid: { display: false }, ticks: { color: "#8b5cf6", font: axisFont } },
+                },
+                plugins: { legend: { labels: { color: chartTick, usePointStyle: true, boxWidth: 8 } }, tooltip: { backgroundColor: "#0f172a", borderColor: "rgba(139,92,246,0.3)", borderWidth: 1, titleColor: "#e8ecf4", bodyColor: "#e8ecf4", padding: 10, displayColors: true } },
+            },
+        });
+    }
+}
+
+function fmtBabyDate(iso) {
+    const d = new Date(iso);
+    if (isNaN(d)) return "--";
+    return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+async function fetchBabyData() {
+    try {
+        const [summaryRes, growthRes, recordsRes] = await Promise.all([
+            fetch(`${API_BASE}/api/v1/baby/summary`),
+            fetch(`${API_BASE}/api/v1/baby/growth`),
+            fetch(`${API_BASE}/api/v1/baby/records?days=14&limit=500`),
+        ]);
+        babySummary = await summaryRes.json();
+        const growth = await growthRes.json();
+        const records = await recordsRes.json();
+        babyRecordsAll = records.data || [];
+        renderBabyKpis(babySummary);
+        renderGrowthChart(growth);
+        renderFeedSleepChart(babyRecordsAll);
+        renderBabyList();
+        renderBabyForm();
+    } catch (err) {
+        console.error("Baby fetch error:", err);
+    }
+}
+
+function renderBabyKpis(s) {
+    const grid = document.getElementById("baby-kpis");
+    if (!grid) return;
+    const g = s.growth || {};
+    const weight = g.kg ? num(g.kg.value) : null;
+    const height = g.cm ? num(g.cm.value) : null;
+    const temp = num(s.temperature && s.temperature.value);
+    const sleepActive = !!s.sleep_active;
+
+    const feedingSub = s.feeding_count > 0
+        ? `<span class="arrow">●</span> ${s.feeding_count} 次`
+        : "";
+    const sleepSub = sleepActive
+        ? `<span class="arrow">◷</span> 睡眠中…`
+        : s.sleep_hours > 0
+        ? `<span class="arrow">◷</span> 今日累计`
+        : "";
+
+    grid.innerHTML =
+        buildKpi({ icon: "🍼", iconBg: "rgba(244,114,182,0.13)", iconColor: "#f472b6", label: "今日喂奶", value: fmt(s.feeding_ml, 0), unit: "ml", sub: feedingSub }) +
+        buildKpi({ icon: "😴", iconBg: "rgba(139,92,246,0.13)", iconColor: "#8b5cf6", label: "今日睡眠", value: fmt(s.sleep_hours, 1), unit: "小时", sub: sleepSub, valueCls: sleepActive ? "pulse-soft" : "" }) +
+        buildKpi({ icon: "🧷", iconBg: "rgba(52,211,153,0.13)", iconColor: "#34d399", label: "今日尿布", value: fmt(s.diaper_count, 0), unit: "次" }) +
+        buildKpi({ icon: "📈", iconBg: "rgba(251,191,36,0.13)", iconColor: "#fbbf24", label: "最新体重", value: fmt(weight, 2), unit: "kg", sub: weight !== null ? `<span class="arrow">●</span> ${fmtBabyDate(g.kg.time)}` : "" }) +
+        buildKpi({ icon: "📏", iconBg: "rgba(59,130,246,0.13)", iconColor: "#3b82f6", label: "最新身高", value: fmt(height, 1), unit: "cm", sub: height !== null ? `<span class="arrow">●</span> ${fmtBabyDate(g.cm.time)}` : "" }) +
+        buildKpi({ icon: "🌡", iconBg: "rgba(248,113,113,0.13)", iconColor: "#f87171", label: "最新体温", value: fmt(temp, 1), unit: "°C", valueCls: temp !== null && temp > 37.5 ? "warn" : "", sub: temp !== null && temp > 37.5 ? `<span class="arrow">⚠</span> 注意监测` : "" });
+}
+
+function renderGrowthChart(growth) {
+    if (!growthChart || !growth.length) {
+        if (growthChart && !growth.length) {
+            growthChart.data.labels = [];
+            growthChart.data.datasets[0].data = [];
+            growthChart.data.datasets[1].data = [];
+            growthChart.update("none");
+            setText("growthHint", "暂无成长记录");
+        }
+        return;
+    }
+    const kg = growth.filter(r => r.unit === "kg");
+    const cm = growth.filter(r => r.unit === "cm");
+    const allTimes = [...new Set(growth.map(r => fmtBabyDate(r.time)))];
+    growthChart.data.labels = allTimes;
+    growthChart.data.datasets[0].data = kg.map(r => ({ x: fmtBabyDate(r.time), y: r.value }));
+    growthChart.data.datasets[1].data = cm.map(r => ({ x: fmtBabyDate(r.time), y: r.value }));
+    growthChart.update("none");
+    const last = growth[growth.length - 1];
+    setText("growthHint", `${growth.length} 条记录 · 最新 ${last.unit === "kg" ? "体重" : "身高"} ${fmt(last.value, last.unit === "kg" ? 2 : 1)} ${last.unit}`);
+}
+
+function renderFeedSleepChart(records) {
+    if (!feedSleepChart) return;
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" }));
+    }
+    const feed = new Map(days.map(d => [d, 0]));
+    const sleep = new Map(days.map(d => [d, 0]));
+    for (const r of records) {
+        const d = fmtBabyDate(r.start_time);
+        if (!feed.has(d)) continue;
+        if (r.record_type === "feeding" && r.amount !== null && r.amount_unit === "ml") {
+            feed.set(d, feed.get(d) + Number(r.amount));
+        }
+        if (r.record_type === "sleep" && r.end_time) {
+            const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
+            if (h > 0 && h < 24) sleep.set(d, sleep.get(d) + h);
+        }
+    }
+    feedSleepChart.data.labels = days;
+    feedSleepChart.data.datasets[0].data = days.map(d => feed.get(d));
+    feedSleepChart.data.datasets[1].data = days.map(d => Math.round(sleep.get(d) * 10) / 10);
+    feedSleepChart.update("none");
+    const feedTotal = days.reduce((a, d) => a + feed.get(d), 0);
+    const sleepTotal = days.reduce((a, d) => a + sleep.get(d), 0);
+    setText("feedSleepHint", `7 天喂奶 ${fmt(feedTotal, 0)} ml · 睡眠 ${fmt(sleepTotal, 1)} 小时`);
+}
+
+// ── Baby entry form ───────────────────────────────────────────
+function renderBabyForm() {
+    const form = document.getElementById("babyForm");
+    if (!form) return;
+    const active = babySummary && babySummary.sleep_active;
+
+    const timeFields = `
+        <div class="baby-field-row">
+            <label>开始时间</label><input type="datetime-local" id="bf-start">
+            <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+        </div>`;
+
+    const forms = {
+        feeding: `
+            <div class="baby-field-row">
+                <label>类型</label>
+                <select id="bf-category"><option value="母乳">母乳</option><option value="奶粉">奶粉</option><option value="辅食">辅食</option></select>
+                <label>奶量 (ml)</label><input type="number" id="bf-amount" placeholder="如 120" min="1" step="1">
+                <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+            </div>${timeFields}`,
+        sleep: `
+            <div class="baby-sleep-actions">
+                <button class="baby-btn primary" id="bf-sleep-start">😴 开始睡眠</button>
+                <button class="baby-btn ghost" id="bf-sleep-end" ${active ? "" : "disabled"}>☀ 结束睡眠</button>
+            </div>
+            <div class="baby-field-row">
+                <label>开始</label><input type="datetime-local" id="bf-start">
+                <label>结束</label><input type="datetime-local" id="bf-end">
+                <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+            </div>
+            <div class="baby-hint">💡 点「开始睡眠」一键记录，宝宝醒了点「结束睡眠」自动计时</div>`,
+        diaper: `
+            <div class="baby-field-row">
+                <label>类型</label>
+                <select id="bf-category"><option value="湿">湿</option><option value="脏">脏</option><option value="混合">混合</option></select>
+                <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+            </div>${timeFields}`,
+        growth: `
+            <div class="baby-field-row">
+                <label>项目</label>
+                <select id="bf-category">
+                    <option value="体重">体重</option><option value="身高">身高</option><option value="头围">头围</option>
+                </select>
+                <label>数值</label><input type="number" id="bf-value" placeholder="如 6.5" min="0" step="0.1">
+                <label>单位</label><span class="bf-unit" id="bf-unit">kg</span>
+            </div>${timeFields}`,
+        temperature: `
+            <div class="baby-field-row">
+                <label>体温 (℃)</label><input type="number" id="bf-value" placeholder="如 36.8" min="34" max="42" step="0.1">
+                <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+            </div>${timeFields}`,
+        vaccination: `
+            <div class="baby-field-row">
+                <label>疫苗名称</label><input type="text" id="bf-category" placeholder="如 乙肝第二针" maxlength="50">
+                <label>备注</label><input type="text" id="bf-note" placeholder="可选" maxlength="100">
+            </div>${timeFields}`,
+        note: `
+            <div class="baby-field-row">
+                <label>记录内容</label><input type="text" id="bf-note" placeholder="如 今天第一次翻身啦！" maxlength="200">
+            </div>${timeFields}`,
+    };
+    form.innerHTML = forms[babyType] || forms.note;
+
+    // unit auto-switch for growth
+    const catSel = document.getElementById("bf-category");
+    const unitEl = document.getElementById("bf-unit");
+    if (catSel && unitEl) {
+        const syncUnit = () => {
+            unitEl.textContent = catSel.value === "体重" ? "kg" : catSel.value === "身高" ? "cm" : "cm";
+        };
+        syncUnit();
+        catSel.addEventListener("change", syncUnit);
+    }
+
+    // sleep one-tap actions
+    const sStart = document.getElementById("bf-sleep-start");
+    if (sStart) sStart.addEventListener("click", async () => {
+        sStart.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/baby/sleep/start`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            toastMsg("😴 睡眠已开始，好好休息~");
+            fetchBabyData();
+        } catch (e) {
+            console.error(e);
+            toastMsg("开始睡眠失败，请重试", true);
+            sStart.disabled = false;
+        }
+    });
+    const sEnd = document.getElementById("bf-sleep-end");
+    if (sEnd) sEnd.addEventListener("click", async () => {
+        sEnd.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE}/api/v1/baby/sleep/end`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            if (!res.ok) throw new Error(await res.text());
+            toastMsg("☀ 睡眠结束，记录完成！");
+            fetchBabyData();
+        } catch (e) {
+            console.error(e);
+            toastMsg("结束睡眠失败，请重试", true);
+            sEnd.disabled = false;
+        }
+    });
+
+    // submit button
+    const submit = document.createElement("button");
+    submit.className = "baby-btn primary baby-submit";
+    submit.textContent = `✓ 保存${BABY_TYPE_META[babyType]?.label || ""}记录`;
+    submit.addEventListener("click", submitBabyRecord);
+    form.appendChild(submit);
+}
+
+function toIso(localValue) {
+    if (!localValue) return null;
+    const d = new Date(localValue);
+    if (isNaN(d)) return null;
+    return d.toISOString();
+}
+
+function submitBabyRecord() {
+    const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ""; };
+    const numVal = id => { const v = val(id); if (!v) return null; const n = Number(v); return isNaN(n) ? null : n; };
+
+    const startIso = toIso(val("bf-start")) || new Date().toISOString();
+    const endIso = toIso(val("bf-end"));
+    const body = {
+        record_type: babyType,
+        category: val("bf-category") || null,
+        start_time: startIso,
+        end_time: endIso,
+        amount: numVal("bf-amount"),
+        amount_unit: babyType === "feeding" ? "ml" : null,
+        value: numVal("bf-value"),
+        value_unit: null,
+        note: val("bf-note") || null,
+    };
+
+    // unit mapping
+    if (babyType === "growth") {
+        const cat = body.category;
+        body.value_unit = cat === "体重" ? "kg" : "cm";
+    }
+    if (babyType === "temperature") body.value_unit = "℃";
+    if (babyType === "feeding" && body.amount === null) {
+        toastMsg("请输入奶量 (ml)", true);
+        return;
+    }
+    if (babyType === "growth" && body.value === null) {
+        toastMsg("请输入数值", true);
+        return;
+    }
+    if (babyType === "temperature" && body.value === null) {
+        toastMsg("请输入体温", true);
+        return;
+    }
+    if (babyType === "vaccination" && !body.category) {
+        toastMsg("请输入疫苗名称", true);
+        return;
+    }
+    if (babyType === "note" && !body.note) {
+        toastMsg("请输入记录内容", true);
+        return;
+    }
+    if (babyType === "sleep" && endIso && new Date(endIso) <= new Date(startIso)) {
+        toastMsg("结束时间需晚于开始时间", true);
+        return;
+    }
+
+    fetch(`${API_BASE}/api/v1/baby/records`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+    })
+        .then(res => {
+            if (!res.ok) throw new Error("保存失败");
+            return res.json();
+        })
+        .then(() => {
+            toastMsg(`✓ ${BABY_TYPE_META[babyType]?.label || ""}记录已保存`);
+            fetchBabyData();
+        })
+        .catch(e => {
+            console.error(e);
+            toastMsg("保存失败，请重试", true);
+        });
+}
+
+// ── Baby record list ──────────────────────────────────────────
+function renderBabyList() {
+    const list = document.getElementById("babyList");
+    if (!list) return;
+    const rows = babyFilter ? babyRecordsAll.filter(r => r.record_type === babyFilter) : babyRecordsAll;
+    if (!rows.length) {
+        list.innerHTML = '<div class="news-empty">暂无记录，用上方「快速记录」添加第一条吧~</div>';
+        return;
+    }
+    const byDate = {};
+    for (const r of rows) {
+        const key = fmtBabyDate(r.start_time);
+        (byDate[key] = byDate[key] || []).push(r);
+    }
+    list.innerHTML = Object.entries(byDate).map(([date, items]) => `
+        <div class="baby-day">
+            <div class="baby-day-label">${date}</div>
+            <div class="baby-day-items">
+                ${items.map(r => babyItemHtml(r)).join("")}
+            </div>
+        </div>`).join("");
+}
+
+function babyItemHtml(r) {
+    const meta = BABY_TYPE_META[r.record_type] || { label: r.record_type, icon: "📌", color: "#8b93a7" };
+    const t = fmtTime(r.start_time);
+    let main = "";
+    switch (r.record_type) {
+        case "feeding":
+            main = `${r.category ? `<b>${escapeHtml(r.category)}</b> ` : ""}<b>${r.amount !== null ? fmt(r.amount, 0) + " ml" : "—"}</b>`;
+            break;
+        case "sleep":
+            if (r.end_time) {
+                const h = (new Date(r.end_time) - new Date(r.start_time)) / 3600000;
+                main = `睡了 <b>${fmt(h, 1)} 小时</b> <span class="baby-dim">${fmtTime(r.end_time)} 醒</span>`;
+            } else {
+                main = `<b class="sleeping">睡眠中…</b>`;
+            }
+            break;
+        case "diaper":
+            main = `<b>${escapeHtml(r.category || "更换")}</b>`;
+            break;
+        case "growth":
+            main = `<b>${r.value !== null ? fmt(r.value, r.value_unit === "kg" ? 2 : 1) + " " + escapeHtml(r.value_unit || "") : "—"}</b>`;
+            break;
+        case "temperature":
+            main = `<b>${r.value !== null ? fmt(r.value, 1) + " ℃" : "—"}</b>`;
+            break;
+        case "vaccination":
+            main = `<b>${escapeHtml(r.category || "接种")}</b>`;
+            break;
+        case "note":
+            main = `<span class="baby-note-text">${escapeHtml(r.note || "")}</span>`;
+            break;
+    }
+    const note = r.note && r.record_type !== "note" ? `<span class="baby-dim"> · ${escapeHtml(r.note.slice(0, 40))}</span>` : "";
+    return `
+        <div class="baby-item" style="--item-color:${meta.color}">
+            <span class="baby-item-icon">${meta.icon}</span>
+            <span class="baby-item-time">${t}</span>
+            <span class="baby-item-main">${main}</span>
+            <span class="baby-item-note">${note}</span>
+            <button class="baby-del" data-id="${r.id}" title="删除">✕</button>
+        </div>`;
+}
+
+function bindBabyListEvents() {
+    const list = document.getElementById("babyList");
+    if (!list) return;
+    list.addEventListener("click", e => {
+        const del = e.target.closest(".baby-del");
+        if (!del) return;
+        const id = del.dataset.id;
+        if (!confirm("删除这条记录？")) return;
+        fetch(`${API_BASE}/api/v1/baby/records/${id}`, { method: "DELETE" })
+            .then(res => {
+                if (!res.ok) throw new Error("删除失败");
+                toastMsg("已删除");
+                fetchBabyData();
+            })
+            .catch(err => { console.error(err); toastMsg("删除失败", true); });
+    });
+}
+
+// toast helper
+let toastTimer = null;
+function toastMsg(msg, isErr = false) {
+    let el = document.getElementById("babyToast");
+    if (!el) {
+        el = document.createElement("div");
+        el.id = "babyToast";
+        el.className = "baby-toast";
+        document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.background = isErr ? "rgba(248,113,113,0.92)" : "rgba(52,211,153,0.92)";
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 2200);
+}
+
+// baby tab switching
+(function () {
+    document.addEventListener("click", e => {
+        const tab = e.target.closest(".baby-tab");
+        if (tab) {
+            document.querySelectorAll(".baby-tab").forEach(t => t.classList.remove("active"));
+            tab.classList.add("active");
+            babyType = tab.dataset.type;
+            renderBabyForm();
+        }
+        const ftab = e.target.closest(".baby-filter .gh-tab");
+        if (ftab) {
+            document.querySelectorAll(".baby-filter .gh-tab").forEach(t => t.classList.remove("active"));
+            ftab.classList.add("active");
+            babyFilter = ftab.dataset.filter || "";
+            renderBabyList();
+        }
+    });
+    bindBabyListEvents();
+})();
+
 // ── Init ──────────────────────────────────────────────────────
 ensureTdsChart();
 ensureTempChart();
 ensureEnergyCharts();
+ensureBabyCharts();
 fetchData();
 renderOverviewHot();
+fetchBabyData();
 setInterval(fetchData, REFRESH_INTERVAL);
 
 // greet based on time of day

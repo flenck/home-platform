@@ -10,13 +10,21 @@ from fastapi import APIRouter, Header, HTTPException, Query, Request
 from .const import DEFAULT_API_TOKEN
 from .database import (
     close_db,
+    delete_baby_record,
+    end_baby_sleep,
+    ensure_baby_tables,
+    get_baby_growth,
+    get_baby_records,
+    get_baby_summary,
     get_current_value,
     get_energy_daily,
     get_energy_monthly,
     get_energy_summary,
     get_latest_readings,
     init_db,
+    insert_baby_record,
     setup_recorder,
+    start_baby_sleep,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -203,6 +211,109 @@ async def energy_monthly(months: int = Query(12, ge=1, le=60)) -> list[dict[str,
     return await get_energy_monthly(months)
 
 
+# ── Baby endpoints ──────────────────────────────────────────────────────────
+
+_BABY_TYPES = {"feeding", "sleep", "diaper", "growth", "temperature", "vaccination", "note"}
+
+
+@router.get("/baby/summary")
+async def baby_summary() -> dict[str, Any]:
+    """Get today's baby care summary (feeding/sleep/diaper + latest growth/temperature)."""
+    return await get_baby_summary()
+
+
+@router.get("/baby/growth")
+async def baby_growth() -> list[dict[str, Any]]:
+    """Get all growth records for the growth chart."""
+    return await get_baby_growth()
+
+
+@router.get("/baby/records")
+async def baby_records(
+    record_type: str | None = Query(None),
+    days: int = Query(7, ge=1, le=365),
+    limit: int = Query(200, ge=1, le=1000),
+) -> dict[str, Any]:
+    """Get baby records, newest first."""
+    if record_type and record_type not in _BABY_TYPES:
+        raise HTTPException(status_code=422, detail="invalid record_type")
+    data = await get_baby_records(record_type=record_type, days=days, limit=limit)
+    return {"data": data}
+
+
+@router.post("/baby/records")
+async def baby_record_create(request: Request) -> dict[str, Any]:
+    """Create a baby record.
+
+    Body (all fields optional except record_type):
+        {
+          "record_type": "feeding|sleep|diaper|growth|temperature|vaccination|note",
+          "category": "母乳/奶粉/辅食 | 湿/脏/混合 | 疫苗名称…",
+          "start_time": ISO8601 | null (default now),
+          "end_time": ISO8601 | null,
+          "amount": number, "amount_unit": "ml|g",
+          "value": number, "value_unit": "kg|cm|℃",
+          "note": "text"
+        }
+    """
+    body = await request.json()
+    record_type = str(body.get("record_type") or "").strip().lower()
+    if record_type not in _BABY_TYPES:
+        raise HTTPException(status_code=422, detail="invalid record_type")
+
+    def _num(key: str) -> float | None:
+        v = body.get(key)
+        if v is None or v == "":
+            return None
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
+    record_id = await insert_baby_record(
+        record_type=record_type,
+        category=str(body.get("category") or "") or None,
+        start_time=body.get("start_time"),
+        end_time=body.get("end_time"),
+        amount=_num("amount"),
+        amount_unit=str(body.get("amount_unit") or "") or None,
+        value=_num("value"),
+        value_unit=str(body.get("value_unit") or "") or None,
+        note=str(body.get("note") or "") or None,
+    )
+    if record_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": record_id, "ok": True}
+
+
+@router.post("/baby/sleep/start")
+async def baby_sleep_start(request: Request) -> dict[str, Any]:
+    """Start a sleep session (end_time stays NULL until ended)."""
+    body = await request.json()
+    record_id = await start_baby_sleep(body.get("start_time"))
+    if record_id is None:
+        raise HTTPException(status_code=503, detail="database unavailable")
+    return {"id": record_id, "ok": True}
+
+
+@router.post("/baby/sleep/end")
+async def baby_sleep_end(request: Request) -> dict[str, Any]:
+    """Close the most recent open sleep session."""
+    body = await request.json()
+    record_id = await end_baby_sleep(body.get("end_time"))
+    if record_id is None:
+        raise HTTPException(status_code=404, detail="no open sleep session")
+    return {"id": record_id, "ok": True}
+
+
+@router.delete("/baby/records/{record_id}")
+async def baby_record_delete(record_id: int) -> dict[str, Any]:
+    """Delete a baby record by id."""
+    if not await delete_baby_record(record_id):
+        raise HTTPException(status_code=404, detail="record not found")
+    return {"ok": True}
+
+
 # ── App factory ────────────────────────────────────────────────────────────
 
 
@@ -222,6 +333,7 @@ def create_app(hass: Any) -> Any:
     async def lifespan(app: FastAPI):
         try:
             await init_db()
+            await ensure_baby_tables()
             setup_recorder(hass)
         except Exception:
             _LOGGER.warning("Database unavailable, running without persistence")
