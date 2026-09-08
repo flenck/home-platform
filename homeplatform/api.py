@@ -28,6 +28,7 @@ from .database import (
     get_energy_daily,
     get_energy_monthly,
     get_energy_summary,
+    get_finance_analysis,
     get_finance_summary,
     get_finance_trend,
     get_latest_readings,
@@ -333,6 +334,12 @@ async def baby_record_delete(record_id: int) -> dict[str, Any]:
 
 
 # ── Finance (记账：账户/交易/分类/预算，参照 Firefly III) ───────────────
+
+
+@router.get("/finance/analysis")
+async def finance_analysis() -> dict[str, Any]:
+    """本月 / 上月 / 当年 数据分析。"""
+    return await get_finance_analysis()
 
 
 @router.get("/finance/summary")

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Home Platform · 全屋智能中枢</title>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css?v=18">
     <script src="/chart.umd.min.js"></script>
 </head>
 <body>
@@ -379,6 +379,17 @@
                     <!-- finance KPI cards -->
                 </div>
 
+                <div class="glass panel-pad finance-analysis-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot amber"></span> 数据分析 · 本月 / 上月 / 当年</span>
+                        <span class="chart-hint" id="finAnalysisHint"></span>
+                    </div>
+                    <div class="kpi-grid fin-analysis-grid" id="finAnalysisGrid">
+                        <!-- 本月 / 上月 / 当年 对比卡片 -->
+                    </div>
+                    <div class="chart-body fin-year-body"><canvas id="finYearChart"></canvas></div>
+                </div>
+
                 <div class="glass panel-pad finance-entry-card">
                     <div class="panel-label"><span class="dot amber"></span> 快速记账</div>
                     <div class="finance-receipt-row">
@@ -489,6 +500,6 @@
         </main>
     </div>
 
-    <script src="/app.js"></script>
+    <script src="/app.js?v=18"></script>
 </body>
 </html>

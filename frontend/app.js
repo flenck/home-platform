@@ -1450,6 +1450,7 @@ function toastMsg(msg, isErr = false) {
 // ── Finance (记账，参照 Firefly III) ──────────────────────────
 let finTrendChart = null;
 let finCatChart = null;
+let finYearChart = null;
 let finAccounts = [];
 let finCategories = [];
 let finTxnType = "expense";
@@ -1494,26 +1495,47 @@ function ensureFinanceCharts() {
             },
         });
     }
+    const yearCanvas = document.getElementById("finYearChart");
+    if (yearCanvas && !finYearChart) {
+        finYearChart = new Chart(yearCanvas.getContext("2d"), {
+            type: "bar",
+            data: { labels: [], datasets: [
+                { label: "收入", data: [], backgroundColor: "rgba(52,211,153,0.5)", borderRadius: 4 },
+                { label: "支出", data: [], backgroundColor: "rgba(248,113,113,0.5)", borderRadius: 4 },
+            ] },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                scales: {
+                    x: { grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont } },
+                    y: { beginAtZero: true, grid: { color: chartGrid }, ticks: { color: chartTick, font: axisFont, callback: v => fmtMoney(v) } },
+                },
+                plugins: { legend: { labels: { color: chartTick, font: axisFont } } },
+            },
+        });
+    }
 }
 
 async function fetchFinanceData() {
     try {
         const month = curFinMonth();
-        const [summaryRes, trendRes, txRes, accRes, catRes] = await Promise.all([
+        const [summaryRes, trendRes, txRes, accRes, catRes, analysisRes] = await Promise.all([
             fetch(`${API_BASE}/api/v1/finance/summary?month=${month}`),
             fetch(`${API_BASE}/api/v1/finance/trend?months=6`),
             fetch(`${API_BASE}/api/v1/finance/transactions?month=${month}&limit=100`),
             fetch(`${API_BASE}/api/v1/finance/accounts`),
             fetch(`${API_BASE}/api/v1/finance/categories`),
+            fetch(`${API_BASE}/api/v1/finance/analysis`),
         ]);
         const summary = await summaryRes.json();
         const trend = await trendRes.json();
         const txs = (await txRes.json()).data || [];
         finAccounts = await accRes.json();
         finCategories = await catRes.json();
+        const analysis = await analysisRes.json();
         renderFinanceKpis(summary);
         renderFinTrend(trend);
         renderFinCat(summary);
+        renderFinanceAnalysis(analysis);
         renderFinAccounts();
         renderFinBudgets(summary);
         renderFinTxs(txs);
@@ -1532,6 +1554,50 @@ function renderFinanceKpis(s) {
         buildKpi({ icon: "💰", iconBg: "rgba(52,211,153,0.13)", iconColor: "#34d399", label: "本月收入", value: fmtMoney(s.income), unit: "", valueCls: "money-in", sub: `<span class="arrow">●</span> ${s.month}` }) +
         buildKpi({ icon: "💸", iconBg: "rgba(248,113,113,0.13)", iconColor: "#f87171", label: "本月支出", value: fmtMoney(s.expense), unit: "", valueCls: "money-out", sub: catsTop ? `<span class="arrow">●</span> ${catsTop.icon} ${catsTop.name} ${fmtMoney(catsTop.spent)}` : "" }) +
         buildKpi({ icon: "⚖️", iconBg: "rgba(139,92,246,0.13)", iconColor: "#8b5cf6", label: "本月结余", value: fmtMoney(s.balance), unit: "", valueCls: s.balance >= 0 ? "" : "warn", sub: s.income > 0 ? `<span class="arrow">●</span> 储蓄率 ${saveRate}%` : "" });
+}
+
+function renderFinanceAnalysis(a) {
+    const grid = document.getElementById("finAnalysisGrid");
+    if (!grid) return;
+    if (!a || !a.current_month) {
+        grid.innerHTML = `<div class="fin-empty">暂无数据，先记一笔账吧</div>`;
+        return;
+    }
+    const cur = a.current_month, prev = a.prev_month, yr = a.year;
+    const momExp = a.mom.expense_delta_pct;
+    const momInc = a.mom.income_delta_pct;
+
+    const expArrow = momExp === null ? "无上月对比" : (momExp > 0
+        ? `<span class="fin-delta up">▲ ${momExp}% 较上月</span>`
+        : `<span class="fin-delta down">▼ ${Math.abs(momExp)}% 较上月</span>`);
+    const incArrow = momInc === null ? "无上月对比" : (momInc > 0
+        ? `<span class="fin-delta up">▲ ${momInc}% 较上月</span>`
+        : `<span class="fin-delta down">▼ ${Math.abs(momInc)}% 较上月</span>`);
+
+    const topCatCur = cur.category_spend[0];
+    const topCatPrev = prev.category_spend[0];
+    const yearMonths = (a.year_monthly || []).filter(m => m.expense > 0 || m.income > 0).length;
+
+    grid.innerHTML =
+        buildKpi({ icon: "💸", iconBg: "rgba(248,113,113,0.13)", iconColor: "#f87171", label: "本月支出", value: fmtMoney(cur.expense), unit: "", valueCls: "money-out",
+            sub: `<span class="arrow">●</span> ${expArrow}` }) +
+        buildKpi({ icon: "💰", iconBg: "rgba(52,211,153,0.13)", iconColor: "#34d399", label: "本月收入", value: fmtMoney(cur.income), unit: "", valueCls: "money-in",
+            sub: `<span class="arrow">●</span> ${incArrow}` }) +
+        buildKpi({ icon: "📅", iconBg: "rgba(139,92,246,0.13)", iconColor: "#8b5cf6", label: `${yr.year} 年累计支出`, value: fmtMoney(yr.expense), unit: "", valueCls: "money-out",
+            sub: `<span class="arrow">●</span> ${yearMonths} 个月有记录 · 结余 ${fmtMoney(yr.balance)}` }) +
+        buildKpi({ icon: "⚖️", iconBg: "rgba(56,189,248,0.13)", iconColor: "#38bdf8", label: "上月对比", value: fmtMoney(prev.expense), unit: "", valueCls: "",
+            sub: topCatPrev ? `<span class="arrow">●</span> 上月大头 ${topCatPrev.icon} ${topCatPrev.name} ${fmtMoney(topCatPrev.spent)}` : `<span class="arrow">●</span> 上月无支出` });
+
+    const hint = document.getElementById("finAnalysisHint");
+    if (hint) hint.textContent = `${cur.month} vs ${prev.month} · 支出环比 ${momExp === null ? "—" : (momExp > 0 ? "+" : "") + momExp + "%"}`;
+
+    if (finYearChart) {
+        const ym = a.year_monthly || [];
+        finYearChart.data.labels = ym.map(m => m.month.slice(2).replace("-", "/"));
+        finYearChart.data.datasets[0].data = ym.map(m => m.income);
+        finYearChart.data.datasets[1].data = ym.map(m => m.expense);
+        finYearChart.update();
+    }
 }
 
 function fmtMoney(v) {

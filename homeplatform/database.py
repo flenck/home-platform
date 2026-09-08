@@ -3,7 +3,7 @@
 import asyncio
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import asyncpg
@@ -910,6 +910,106 @@ async def get_finance_summary(month: str | None = None) -> dict[str, Any]:
             for c in cats
         ],
         "budgets": budget_items,
+    }
+
+
+async def get_finance_analysis() -> dict[str, Any]:
+    """本月 / 上月 / 当年 数据分析：收支、环比、当年月度分布。"""
+    pool = _ensure_pool()
+    if pool is None:
+        return {}
+    tz = timezone.utc
+    now = datetime.now(tz).astimezone()
+    cur_month = now.strftime("%Y-%m")
+    prev_month = (now.replace(day=1) - timedelta(days=1)).strftime("%Y-%m")
+    year = now.year
+
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT to_char(series.m, 'YYYY-MM') AS month,
+                   COALESCE(SUM(CASE WHEN t.txn_type = 'income' THEN t.amount ELSE 0 END), 0) AS income,
+                   COALESCE(SUM(CASE WHEN t.txn_type = 'expense' THEN t.amount ELSE 0 END), 0) AS expense
+            FROM generate_series(
+                make_date($1, 1, 1),
+                make_date($1, 12, 1),
+                interval '1 month'
+            ) AS series(m)
+            LEFT JOIN finance_transactions t
+              ON date_trunc('month', t.txn_date AT TIME ZONE 'Asia/Shanghai') = series.m
+            GROUP BY series.m
+            ORDER BY series.m
+            """,
+            year,
+        )
+        cats_cur = await conn.fetch(
+            """
+            SELECT c.id, c.name, c.icon, COALESCE(SUM(t.amount), 0) AS spent
+            FROM finance_categories c
+            JOIN finance_transactions t ON t.category_id = c.id AND t.txn_type = 'expense'
+            WHERE to_char(t.txn_date AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM') = $1
+            GROUP BY c.id ORDER BY spent DESC
+            """,
+            cur_month,
+        )
+        cats_prev = await conn.fetch(
+            """
+            SELECT c.id, c.name, c.icon, COALESCE(SUM(t.amount), 0) AS spent
+            FROM finance_categories c
+            JOIN finance_transactions t ON t.category_id = c.id AND t.txn_type = 'expense'
+            WHERE to_char(t.txn_date AT TIME ZONE 'Asia/Shanghai', 'YYYY-MM') = $1
+            GROUP BY c.id ORDER BY spent DESC
+            """,
+            prev_month,
+        )
+
+    def _agg(month: str):
+        for r in rows:
+            if r["month"] == month:
+                return {"month": month,
+                        "income": round(float(r["income"] or 0), 2),
+                        "expense": round(float(r["expense"] or 0), 2)}
+        return {"month": month, "income": 0.0, "expense": 0.0}
+
+    cur = _agg(cur_month)
+    prev = _agg(prev_month)
+    cur["balance"] = round(cur["income"] - cur["expense"], 2)
+    prev["balance"] = round(prev["income"] - prev["expense"], 2)
+    cur["category_spend"] = [
+        {"id": c["id"], "name": c["name"], "icon": c["icon"], "spent": round(float(c["spent"]), 2)}
+        for c in cats_cur
+    ]
+    prev["category_spend"] = [
+        {"id": c["id"], "name": c["name"], "icon": c["icon"], "spent": round(float(c["spent"]), 2)}
+        for c in cats_prev
+    ]
+
+    year_income = sum(float(r["income"] or 0) for r in rows)
+    year_expense = sum(float(r["expense"] or 0) for r in rows)
+
+    def _delta(cur_v: float, prev_v: float) -> float | None:
+        if prev_v == 0:
+            return None if cur_v == 0 else 100.0
+        return round((cur_v - prev_v) / prev_v * 100, 1)
+
+    return {
+        "current_month": cur,
+        "prev_month": prev,
+        "year": {
+            "year": year,
+            "income": round(year_income, 2),
+            "expense": round(year_expense, 2),
+            "balance": round(year_income - year_expense, 2),
+        },
+        "year_monthly": [
+            {"month": r["month"], "income": round(float(r["income"] or 0), 2),
+             "expense": round(float(r["expense"] or 0), 2)}
+            for r in rows
+        ],
+        "mom": {
+            "expense_delta_pct": _delta(cur["expense"], prev["expense"]),
+            "income_delta_pct": _delta(cur["income"], prev["income"]),
+        },
     }
 
 
