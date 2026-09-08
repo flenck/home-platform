@@ -9,7 +9,7 @@ from PIL import Image
 
 MODEL_PATH = "/home/dufan2514897261/sgcc/yolo_model/best.onnx"
 IMGSZ = 416
-CONF_THRESH = 0.25
+CONF_THRESH = 0.15
 IOU_THRESH = 0.45
 
 _sess = None
