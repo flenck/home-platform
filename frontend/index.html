@@ -375,21 +375,6 @@
 
             <!-- ══════════ Finance (记账) ══════════ -->
             <section class="page" id="page-finance">
-                <div class="kpi-grid" id="finance-kpis">
-                    <!-- finance KPI cards -->
-                </div>
-
-                <div class="glass panel-pad finance-analysis-card">
-                    <div class="chart-head">
-                        <span class="panel-label"><span class="dot amber"></span> 数据分析 · 本月 / 上月 / 当年</span>
-                        <span class="chart-hint" id="finAnalysisHint"></span>
-                    </div>
-                    <div class="kpi-grid fin-analysis-grid" id="finAnalysisGrid">
-                        <!-- 本月 / 上月 / 当年 对比卡片 -->
-                    </div>
-                    <div class="chart-body fin-year-body"><canvas id="finYearChart"></canvas></div>
-                </div>
-
                 <div class="glass panel-pad finance-entry-card">
                     <div class="panel-label"><span class="dot amber"></span> 快速记账</div>
                     <div class="finance-receipt-row">
@@ -414,6 +399,21 @@
                             <button class="fin-btn" id="finSaveBtn">保存记账</button>
                         </div>
                     </div>
+                </div>
+
+                <div class="kpi-grid" id="finance-kpis">
+                    <!-- finance KPI cards -->
+                </div>
+
+                <div class="glass panel-pad finance-analysis-card">
+                    <div class="chart-head">
+                        <span class="panel-label"><span class="dot amber"></span> 数据分析 · 本月 / 上月 / 当年</span>
+                        <span class="chart-hint" id="finAnalysisHint"></span>
+                    </div>
+                    <div class="kpi-grid fin-analysis-grid" id="finAnalysisGrid">
+                        <!-- 本月 / 上月 / 当年 对比卡片 -->
+                    </div>
+                    <div class="chart-body fin-year-body"><canvas id="finYearChart"></canvas></div>
                 </div>
 
                 <div class="finance-top-row">
